@@ -1,0 +1,11 @@
+[id]
+name = "selene-native-macos"
+
+[build]
+command = "swift build --product SeleneNative | grep -E '(warning:|error:)' | grep -v 'warning: using legacy build system' || true"
+
+[lint]
+command = "swift build 2>&1 | grep -c 'error:' || echo 0"
+
+[test]
+command = "swift test"
