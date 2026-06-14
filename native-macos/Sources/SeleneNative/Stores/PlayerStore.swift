@@ -82,7 +82,6 @@ final class PlayerStore {
         isEpisodeReversed.toggle()
     }
 
-    @MainActor
     func loadDetailAndPlay(record: PlayRecord, provider: ContentProvider) async {
         do {
             guard let result = try await provider.detail(source: record.source, id: record.id) else {
@@ -90,8 +89,6 @@ final class PlayerStore {
                 return
             }
             currentSourceResults = [result]
-            currentResult = result
-            currentEpisodeIndex = record.index
 
             guard result.episodes.indices.contains(record.index),
                   let url = URL(string: result.episodes[record.index]) else {
@@ -99,6 +96,8 @@ final class PlayerStore {
                 return
             }
 
+            currentResult = result
+            currentEpisodeIndex = record.index
             replaceItem(url: url, result: result, index: record.index)
             if record.playTime > 0 {
                 pendingSeekTime = record.playTime
