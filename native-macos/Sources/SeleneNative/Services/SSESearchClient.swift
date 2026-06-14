@@ -119,7 +119,7 @@ final class SSESearchClient {
         return (eventType, payload)
     }
 
-    private func handle(
+    func handle(
         event: (type: String, data: [String: Any]),
         currentProgress: SearchProgress
     ) -> SearchProgress {
@@ -130,11 +130,13 @@ final class SSESearchClient {
             next.totalSources = intValue(event.data["totalSources"] ?? event.data["total_sources"]) ?? 0
             next.completedSources = 0
             next.currentSource = nil
+            next.error = nil
             next.isComplete = false
             progressContinuation?.yield(next)
         case "sourceResult":
             next.completedSources += 1
             next.currentSource = event.data["sourceName"] as? String ?? event.data["source_name"] as? String
+            next.error = nil
             if let rawResults = event.data["results"] as? [[String: Any]] {
                 let results = rawResults.compactMap { raw -> SearchResult? in
                     guard let data = try? JSONSerialization.data(withJSONObject: raw) else { return nil }
@@ -153,6 +155,7 @@ final class SSESearchClient {
             progressContinuation?.yield(next)
         case "complete":
             next.isComplete = true
+            next.error = nil
             next.completedSources = max(next.completedSources, next.totalSources)
             progressContinuation?.yield(next)
         default:

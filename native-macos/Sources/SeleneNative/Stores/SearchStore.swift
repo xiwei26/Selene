@@ -47,7 +47,7 @@ final class SearchStore {
     }
 
     var filteredAggregatedResults: [AggregatedSearchResult] {
-        var values = aggregatedResults
+        var values = aggregates(from: contentFilter.filter(results))
         if let sourceFilter {
             values = values.filter { $0.sourceNames.contains(sourceFilter) }
         }
@@ -58,8 +58,6 @@ final class SearchStore {
         if !normalizedTitle.isEmpty {
             values = values.filter { $0.title.localizedCaseInsensitiveContains(normalizedTitle) }
         }
-        let visibleKeys = Set(contentFilter.filter(results).map { AggregatedSearchResult.fromSearchResult($0).key })
-        values = values.filter { visibleKeys.contains($0.key) }
         return values.sorted { left, right in
             sortNewestFirst ? left.year > right.year : left.year < right.year
         }
@@ -223,6 +221,10 @@ final class SearchStore {
     }
 
     private func rebuildAggregates() {
+        aggregatedResults = aggregates(from: results).sorted { $0.addedTimestamp < $1.addedTimestamp }
+    }
+
+    private func aggregates(from results: [SearchResult]) -> [AggregatedSearchResult] {
         var grouped: [String: AggregatedSearchResult] = [:]
         for result in results {
             let aggregate = AggregatedSearchResult.fromSearchResult(result)
@@ -233,6 +235,6 @@ final class SearchStore {
                 grouped[aggregate.key] = aggregate
             }
         }
-        aggregatedResults = grouped.values.sorted { $0.addedTimestamp < $1.addedTimestamp }
+        return grouped.values.sorted { $0.addedTimestamp < $1.addedTimestamp }
     }
 }

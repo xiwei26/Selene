@@ -19,6 +19,12 @@ final class PlayerStore {
 
     init() {}
 
+    deinit {
+        MainActor.assumeIsolated {
+            invalidateObservers()
+        }
+    }
+
     var orderedEpisodeIndices: [Int] {
         let count = currentResult?.episodes.count ?? 0
         let indices = Array(0..<count)

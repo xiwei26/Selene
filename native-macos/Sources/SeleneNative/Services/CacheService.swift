@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 final class CacheService: @unchecked Sendable {
     static let shared = CacheService()
@@ -73,11 +74,8 @@ final class CacheService: @unchecked Sendable {
     }
 
     private func sanitized(_ key: String) -> String {
-        key.map { character in
-            character.isLetter || character.isNumber || character == "-" || character == "_" ? character : "_"
-        }
-        .map(String.init)
-        .joined()
+        let digest = SHA256.hash(data: Data(key.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 }
 

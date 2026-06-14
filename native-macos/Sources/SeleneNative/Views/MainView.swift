@@ -85,7 +85,7 @@ struct MainView: View {
         }
         .task(id: sessionStore.session?.id) {
             guard let url = sessionStore.session?.serverURL else { return }
-            let newProvider = ServerAPIClient(baseURL: url)
+            let newProvider = ServerAPIClient(baseURL: url, cookie: sessionStore.session?.cookie ?? "")
             provider = newProvider
             searchStore = SearchStore(provider: newProvider)
             if sessionStore.session?.isLocalMode == true {

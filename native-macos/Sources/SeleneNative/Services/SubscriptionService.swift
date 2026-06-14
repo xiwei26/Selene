@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 enum Base58 {
     private static let alphabet = Array("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
@@ -88,7 +89,10 @@ final class SubscriptionService {
         if let lives = object["lives"] as? [[String: Any]] {
             liveSources = lives.map { value in
                 LiveSource(
-                    key: value["key"] as? String ?? value["name"] as? String ?? UUID().uuidString,
+                    key: value["key"] as? String
+                        ?? value["name"] as? String
+                        ?? value["url"] as? String
+                        ?? "live-\(indexHash(value))",
                     name: value["name"] as? String ?? "",
                     url: value["url"] as? String ?? "",
                     ua: value["ua"] as? String ?? "",
@@ -103,5 +107,13 @@ final class SubscriptionService {
             searchResources: resources.isEmpty ? nil : resources,
             liveSources: liveSources.isEmpty ? nil : liveSources
         )
+    }
+
+    private static func indexHash(_ value: [String: Any]) -> String {
+        let description = value.keys.sorted().map { key in
+            "\(key)=\(value[key] ?? "")"
+        }.joined(separator: "|")
+        let digest = SHA256.hash(data: Data(description.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 }

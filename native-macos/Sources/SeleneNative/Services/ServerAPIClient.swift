@@ -2,10 +2,12 @@ import Foundation
 
 final class ServerAPIClient: ContentProvider, Sendable {
     let baseURL: URL
+    private let cookie: String
     private let session: URLSession
 
-    init(baseURL: URL, session: URLSession = .shared) {
+    init(baseURL: URL, cookie: String = "", session: URLSession = .shared) {
         self.baseURL = baseURL
+        self.cookie = cookie
         self.session = session
     }
 
@@ -47,6 +49,7 @@ final class ServerAPIClient: ContentProvider, Sendable {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        applyCookie(to: &request)
 
         let (data, httpResponse) = try await session.data(for: request)
         guard let httpResponse = httpResponse as? HTTPURLResponse,
@@ -82,6 +85,7 @@ final class ServerAPIClient: ContentProvider, Sendable {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        applyCookie(to: &request)
 
         let (data, httpResponse) = try await session.data(for: request)
         guard let httpResponse = httpResponse as? HTTPURLResponse,
@@ -102,6 +106,7 @@ final class ServerAPIClient: ContentProvider, Sendable {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        applyCookie(to: &request)
 
         let (data, httpResponse) = try await session.data(for: request)
         guard let httpResponse = httpResponse as? HTTPURLResponse,
@@ -284,6 +289,7 @@ final class ServerAPIClient: ContentProvider, Sendable {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        applyCookie(to: &request)
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -300,6 +306,11 @@ final class ServerAPIClient: ContentProvider, Sendable {
             throw APIError.responseError(statusCode: httpResponse.statusCode)
         }
         return data
+    }
+
+    private func applyCookie(to request: inout URLRequest) {
+        guard !cookie.isEmpty else { return }
+        request.setValue(cookie, forHTTPHeaderField: "Cookie")
     }
 
     private func jsonObject(from data: Data) throws -> Any {

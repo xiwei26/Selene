@@ -97,7 +97,7 @@ final class LiveServiceClient: LiveProviding, Sendable {
             let group = attribute("group-title", in: info)
             channels.append(
                 LiveChannel(
-                    id: "\(name)-\(line)",
+                    id: "\((tvgId.isEmpty ? name : tvgId))-\(line)",
                     tvgId: tvgId,
                     name: name,
                     logo: logo,

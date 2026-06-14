@@ -213,8 +213,9 @@ struct SearchResultsView: View {
     }
 
     private func sourceResults(for result: SearchResult) -> [SearchResult] {
-        searchStore.results.filter { candidate in
-            candidate.title == result.title && candidate.year == result.year
+        let key = AggregatedSearchResult.fromSearchResult(result).key
+        return searchStore.results.filter { candidate in
+            AggregatedSearchResult.fromSearchResult(candidate).key == key
         }
     }
 
