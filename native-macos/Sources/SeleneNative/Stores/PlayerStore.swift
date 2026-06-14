@@ -82,6 +82,33 @@ final class PlayerStore {
         isEpisodeReversed.toggle()
     }
 
+    @MainActor
+    func loadDetailAndPlay(record: PlayRecord, provider: ContentProvider) async {
+        do {
+            guard let result = try await provider.detail(source: record.source, id: record.id) else {
+                playbackError = "未找到该视频详情"
+                return
+            }
+            currentSourceResults = [result]
+            currentResult = result
+            currentEpisodeIndex = record.index
+
+            guard result.episodes.indices.contains(record.index),
+                  let url = URL(string: result.episodes[record.index]) else {
+                playbackError = "剧集链接不可用"
+                return
+            }
+
+            replaceItem(url: url, result: result, index: record.index)
+            if record.playTime > 0 {
+                pendingSeekTime = record.playTime
+            }
+            play()
+        } catch {
+            playbackError = "获取视频详情失败: \(error.localizedDescription)"
+        }
+    }
+
     func makePlayRecord() -> PlayRecord? {
         guard let result = currentResult else { return nil }
         return PlayRecord(
