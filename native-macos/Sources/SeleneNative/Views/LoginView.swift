@@ -7,12 +7,21 @@ struct LoginView: View {
     @State private var password: String = ""
     @State private var isLoggingIn: Bool = false
     @State private var displayError: String?
+    @State private var logoTapCount = 0
+    @State private var showsLocalMode = false
+    @State private var subscriptionText = ""
 
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "play.rectangle.fill")
                 .font(.system(size: 48))
                 .foregroundStyle(.tint)
+                .onTapGesture {
+                    logoTapCount += 1
+                    if logoTapCount >= 10 {
+                        showsLocalMode = true
+                    }
+                }
 
             Text("Selene")
                 .font(.title)
@@ -25,7 +34,6 @@ struct LoginView: View {
                 TextField("https://example.com", text: $serverURL)
                     .textFieldStyle(.roundedBorder)
                     .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -34,7 +42,7 @@ struct LoginView: View {
                     .foregroundStyle(.secondary)
                 TextField("用户名", text: $username)
                     .textFieldStyle(.roundedBorder)
-                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -50,6 +58,21 @@ struct LoginView: View {
                     .font(.caption)
                     .foregroundStyle(.red)
                     .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if showsLocalMode {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("本地订阅")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    TextField("Base58 订阅内容", text: $subscriptionText)
+                        .textFieldStyle(.roundedBorder)
+                    Button("进入本地模式") {
+                        sessionStore.loginLocal(subscriptionContent: subscriptionText)
+                        displayError = sessionStore.errorMessage
+                    }
+                    .disabled(subscriptionText.isEmpty)
+                }
             }
 
             Button {
@@ -77,7 +100,7 @@ struct LoginView: View {
             Spacer()
         }
         .padding(30)
-        .frame(width: 360, height: 380)
+        .frame(width: 360, height: showsLocalMode ? 500 : 380)
         .onAppear {
             if let existingURL = sessionStore.session?.serverURL.absoluteString {
                 serverURL = existingURL

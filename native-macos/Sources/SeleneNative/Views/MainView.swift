@@ -1,127 +1,155 @@
 import SwiftUI
 
 struct MainView: View {
+    private enum NavigationSection: String, CaseIterable, Identifiable {
+        case home, search, movie, tv, anime, show, live, favorites, history, settings
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .home: return "首页"
+            case .search: return "搜索"
+            case .movie: return "电影"
+            case .tv: return "电视剧"
+            case .anime: return "动漫"
+            case .show: return "综艺"
+            case .live: return "直播"
+            case .favorites: return "收藏"
+            case .history: return "历史"
+            case .settings: return "设置"
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .home: return "house"
+            case .search: return "magnifyingglass"
+            case .movie: return "film"
+            case .tv: return "tv"
+            case .anime: return "sparkles.tv"
+            case .show: return "theatermasks"
+            case .live: return "dot.radiowaves.left.and.right"
+            case .favorites: return "heart"
+            case .history: return "clock"
+            case .settings: return "gearshape"
+            }
+        }
+    }
+
     @Environment(SessionStore.self) private var sessionStore
+    @Environment(FavoritesStore.self) private var favoritesStore
+    @Environment(HistoryStore.self) private var historyStore
+    @Environment(ThemeStore.self) private var themeStore
+    @State private var selection: NavigationSection? = .home
     @State private var provider: ServerAPIClient
     @State private var searchStore: SearchStore
-    @State private var playerStore: PlayerStore
+    @State private var playerStore = PlayerStore()
+    @State private var doubanProvider = DoubanAPIClient()
+    @State private var bangumiProvider = BangumiAPIClient()
+    @State private var liveStore = LiveStore()
+    @State private var liveProvider = LiveServiceClient()
 
     init() {
-        // Initialize with a placeholder; will be replaced in .task
         let placeholderURL = URL(string: "https://example.com")!
-        _provider = State(initialValue: ServerAPIClient(baseURL: placeholderURL))
-        _searchStore = State(initialValue: SearchStore(provider: ServerAPIClient(baseURL: placeholderURL)))
-        _playerStore = State(initialValue: PlayerStore())
+        let placeholderProvider = ServerAPIClient(baseURL: placeholderURL)
+        _provider = State(initialValue: placeholderProvider)
+        _searchStore = State(initialValue: SearchStore(provider: placeholderProvider))
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Top toolbar
-            HStack {
-                Text("Selene")
-                    .font(.headline)
+        NavigationSplitView {
+            List(selection: $selection) {
+                sidebarButton(.home)
+                sidebarButton(.search)
 
-                Button("退出登录", role: .destructive) {
-                    sessionStore.logout()
+                Section("浏览") {
+                    sidebarButton(.movie)
+                    sidebarButton(.tv)
+                    sidebarButton(.anime)
+                    sidebarButton(.show)
+                    sidebarButton(.live)
                 }
-                Spacer()
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
 
-            Divider()
-
-            // Content area
-            HSplitView {
-                // Left: Search + Results
-                VStack(spacing: 0) {
-                    searchBar
-                    Divider()
-                    resultsList
-                }
-                .frame(minWidth: 320)
-
-                // Right: Detail + Player
-                VStack(spacing: 0) {
-                    if let result = searchStore.selectedResult {
-                        DetailView(
-                            result: result,
-                            onPlay: { url in
-                                playerStore.replaceItem(url: url)
-                                playerStore.play()
-                            }
-                        )
-                    } else {
-                        ContentUnavailableView {
-                            Label("选择一个结果查看详情", systemImage: "doc.text.magnifyingglass")
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-
-                    if playerStore.currentEpisodeURL != nil {
-                        Divider()
-                        PlayerView(playerStore: playerStore)
-                            .frame(height: 200)
-                    }
+                Section("个人") {
+                    sidebarButton(.favorites)
+                    sidebarButton(.history)
+                    sidebarButton(.settings)
                 }
             }
-
-            if searchStore.isLoading {
-                Divider()
-                ProgressView("搜索中...")
-                    .padding(.vertical, 4)
-            }
+            .navigationTitle("Selene")
+            .frame(minWidth: 190)
+        } detail: {
+            contentView
+                .navigationTitle(selection?.title ?? "Selene")
         }
-        .navigationTitle("Selene")
-        .task {
-            // Initialize with actual session URL
-            if let url = sessionStore.session?.serverURL {
-                let newProvider = ServerAPIClient(baseURL: url)
-                provider = newProvider
-                searchStore = SearchStore(provider: newProvider)
-                await searchStore.loadResources()
-            }
-        }
-    }
-
-    private var searchBar: some View {
-        HStack {
-            TextField("搜索...", text: $searchStore.query)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit {
-                    Task { await searchStore.search() }
-                }
-
-            Button(searchStore.isLoading ? "搜索中..." : "搜索") {
-                Task { await searchStore.search() }
-            }
-            .disabled(searchStore.isLoading || searchStore.query.isEmpty)
-        }
-        .padding()
-    }
-
-    private var resultsList: some View {
-        Group {
-            if searchStore.results.isEmpty && searchStore.query.isEmpty {
-                ContentUnavailableView(
-                    "开始搜索",
-                    systemImage: "film",
-                    description: Text("在服务器上搜索视频内容")
-                )
-            } else if searchStore.results.isEmpty {
-                ContentUnavailableView(
-                    "无结果",
-                    systemImage: "magnifyingglass",
-                    description: Text("尝试其他关键词")
-                )
+        .task(id: sessionStore.session?.id) {
+            guard let url = sessionStore.session?.serverURL else { return }
+            let newProvider = ServerAPIClient(baseURL: url)
+            provider = newProvider
+            searchStore = SearchStore(provider: newProvider)
+            if sessionStore.session?.isLocalMode == true {
+                liveProvider = LiveServiceClient(localSources: sessionStore.session?.localLiveSources ?? [])
             } else {
-                List(searchStore.results, selection: $searchStore.selectedResult) { result in
-                    SearchResultRow(result: result)
-                        .onTapGesture {
-                            searchStore.selectResult(result)
-                        }
-                }
+                liveProvider = LiveServiceClient(provider: newProvider)
             }
+            liveStore = LiveStore()
+            await searchStore.loadResources()
+            await searchStore.loadHistory()
+            await favoritesStore.loadFavorites(provider: newProvider)
+            await historyStore.loadRecords(provider: newProvider)
         }
     }
+
+    private func sidebarButton(_ section: NavigationSection) -> some View {
+        Label(section.title, systemImage: section.icon)
+            .tag(section)
+    }
+
+    @ViewBuilder
+    private var contentView: some View {
+        switch selection ?? .search {
+        case .home:
+            HomeView(
+                historyStore: historyStore,
+                doubanProvider: doubanProvider,
+                bangumiProvider: bangumiProvider
+            )
+        case .search:
+            SearchResultsView(
+                searchStore: searchStore,
+                playerStore: playerStore,
+                provider: provider,
+                favoritesStore: favoritesStore,
+                historyStore: historyStore,
+                session: sessionStore.session
+            )
+        case .movie:
+            CategoryView(category: .movie, doubanProvider: doubanProvider, bangumiProvider: bangumiProvider)
+        case .tv:
+            CategoryView(category: .tv, doubanProvider: doubanProvider, bangumiProvider: bangumiProvider)
+        case .anime:
+            CategoryView(category: .anime, doubanProvider: doubanProvider, bangumiProvider: bangumiProvider)
+        case .show:
+            CategoryView(category: .show, doubanProvider: doubanProvider, bangumiProvider: bangumiProvider)
+        case .live:
+            LiveScreenView(liveStore: liveStore, provider: liveProvider)
+        case .favorites:
+            FavoritesView(favoritesStore: favoritesStore, provider: provider)
+        case .history:
+            HistoryView(historyStore: historyStore, provider: provider)
+        case .settings:
+            SettingsView(
+                sessionStore: sessionStore,
+                themeStore: themeStore,
+                versionService: VersionService()
+            )
+        }
+    }
+
+    private func placeholder(_ text: String, icon: String) -> some View {
+        ContentUnavailableView("即将可用", systemImage: icon, description: Text(text))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
 }

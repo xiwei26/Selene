@@ -1,6 +1,6 @@
 import Foundation
 
-struct SearchResult: Codable, Identifiable {
+struct SearchResult: Codable, Identifiable, Hashable, Equatable {
     let id: String
     let title: String
     let poster: String

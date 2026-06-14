@@ -2,7 +2,9 @@ import SwiftUI
 
 struct DetailView: View {
     let result: SearchResult
-    let onPlay: (URL) -> Void
+    var isFavorited: Bool = false
+    var onToggleFavorite: ((SearchResult) -> Void)?
+    let onPlay: (SearchResult, Int, URL) -> Void
 
     var body: some View {
         ScrollView {
@@ -38,6 +40,18 @@ struct DetailView: View {
                     Text(typeName)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                if let onToggleFavorite {
+                    Button {
+                        onToggleFavorite(result)
+                    } label: {
+                        Label(isFavorited ? "取消收藏" : "收藏", systemImage: isFavorited ? "heart.fill" : "heart")
+                    }
+                    .labelStyle(.iconOnly)
+                    .help(isFavorited ? "取消收藏" : "收藏")
                 }
             }
         }
@@ -75,7 +89,7 @@ struct DetailView: View {
                     ForEach(result.episodes.indices, id: \.self) { index in
                         Button {
                             if let url = URL(string: result.episodes[index]) {
-                                onPlay(url)
+                                onPlay(result, index, url)
                             }
                         } label: {
                             Text(result.episodeTitle(for: index))

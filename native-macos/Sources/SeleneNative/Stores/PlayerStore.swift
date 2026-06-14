@@ -2,33 +2,39 @@ import SwiftUI
 import AVKit
 
 @MainActor
-final class PlayerStore: ObservableObject {
-    @Published var player: AVPlayer?
-    @Published var playbackError: String?
-    @Published var currentEpisodeURL: URL?
+@Observable
+final class PlayerStore {
+    var player: AVPlayer?
+    var playbackError: String?
+    var currentEpisodeURL: URL?
+    var currentResult: SearchResult?
+    var currentSourceResults: [SearchResult] = []
+    var currentEpisodeIndex: Int = 0
+    var isEpisodeReversed: Bool = false
+    var playTime: Int = 0
+    var totalTime: Int = 0
 
-    private var playerObserver: NSKeyValueObservation?
+    @ObservationIgnored private var playerObserver: NSKeyValueObservation?
+    @ObservationIgnored private var timeObserver: Any?
 
     init() {}
 
-    func loadEpisode(url: URL) {
+    var orderedEpisodeIndices: [Int] {
+        let count = currentResult?.episodes.count ?? 0
+        let indices = Array(0..<count)
+        return isEpisodeReversed ? indices.reversed() : indices
+    }
+
+    func loadEpisode(url: URL, result: SearchResult? = nil, index: Int = 0) {
         playbackError = nil
         currentEpisodeURL = url
+        currentResult = result ?? currentResult
+        currentEpisodeIndex = index
 
         let playerItem = AVPlayerItem(url: url)
         let player = AVPlayer(playerItem: playerItem)
         self.player = player
-
-        playerObserver = playerItem.observe(
-            \.status,
-            options: [.new, .old]
-        ) { [weak self] item, _ in
-            Task { @MainActor in
-                if item.status == .failed {
-                    self?.playbackError = self?.playerItemErrorDescription(item.error)
-                }
-            }
-        }
+        observe(player: player, item: playerItem)
     }
 
     func play() {
@@ -39,19 +45,100 @@ final class PlayerStore: ObservableObject {
         player?.pause()
     }
 
-    func replaceItem(url: URL) {
-        playerObserver?.invalidate()
-        playerObserver = nil
-        loadEpisode(url: url)
+    func replaceItem(url: URL, result: SearchResult? = nil, index: Int = 0) {
+        invalidateObservers()
+        loadEpisode(url: url, result: result, index: index)
+    }
+
+    func switchSource(to result: SearchResult) {
+        currentResult = result
+        currentEpisodeIndex = min(currentEpisodeIndex, max(result.episodes.count - 1, 0))
+        guard result.episodes.indices.contains(currentEpisodeIndex),
+              let url = URL(string: result.episodes[currentEpisodeIndex]) else {
+            return
+        }
+        replaceItem(url: url, result: result, index: currentEpisodeIndex)
+        play()
+    }
+
+    func playEpisode(at index: Int) {
+        guard let result = currentResult,
+              result.episodes.indices.contains(index),
+              let url = URL(string: result.episodes[index]) else {
+            return
+        }
+        replaceItem(url: url, result: result, index: index)
+        play()
+    }
+
+    func toggleEpisodeOrder() {
+        isEpisodeReversed.toggle()
+    }
+
+    func makePlayRecord() -> PlayRecord? {
+        guard let result = currentResult else { return nil }
+        return PlayRecord(
+            id: "\(result.source)+\(result.id)",
+            source: result.source,
+            title: result.title,
+            sourceName: result.sourceName,
+            year: result.year,
+            cover: result.poster,
+            index: currentEpisodeIndex,
+            totalEpisodes: result.episodes.count,
+            playTime: playTime,
+            totalTime: totalTime,
+            saveTime: Int64(Date().timeIntervalSince1970 * 1000),
+            searchTitle: result.title
+        )
     }
 
     func stop() {
         player?.pause()
         player = nil
-        playerObserver?.invalidate()
-        playerObserver = nil
+        invalidateObservers()
         currentEpisodeURL = nil
         playbackError = nil
+        playTime = 0
+        totalTime = 0
+    }
+
+    private func observe(player: AVPlayer, item: AVPlayerItem) {
+        playerObserver = item.observe(
+            \.status,
+            options: [.new, .old]
+        ) { [weak self] item, _ in
+            Task { @MainActor in
+                if item.status == .failed {
+                    self?.playbackError = self?.playerItemErrorDescription(item.error)
+                } else if item.status == .readyToPlay {
+                    self?.totalTime = Self.seconds(from: item.duration)
+                }
+            }
+        }
+
+        timeObserver = player.addPeriodicTimeObserver(
+            forInterval: CMTime(seconds: 10, preferredTimescale: 600),
+            queue: .main
+        ) { [weak self] time in
+            Task { @MainActor in
+                self?.playTime = Self.seconds(from: time)
+            }
+        }
+    }
+
+    private func invalidateObservers() {
+        if let timeObserver {
+            player?.removeTimeObserver(timeObserver)
+        }
+        timeObserver = nil
+        playerObserver?.invalidate()
+        playerObserver = nil
+    }
+
+    private static func seconds(from time: CMTime) -> Int {
+        guard time.isNumeric && !time.seconds.isNaN && !time.seconds.isInfinite else { return 0 }
+        return max(Int(time.seconds), 0)
     }
 
     private func playerItemErrorDescription(_ error: Error?) -> String {

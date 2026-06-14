@@ -2,25 +2,40 @@ import SwiftUI
 import AVKit
 
 struct PlayerView: View {
-    @State private var playerStore: PlayerStore
-
-    init(playerStore: PlayerStore) {
-        _playerStore = State(initialValue: playerStore)
-    }
+    let playerStore: PlayerStore
 
     var body: some View {
-        Group {
-            if let player = playerStore.player {
-                VideoPlayer(player: player)
-                    .aspectRatio(contentMode: .fit)
-            } else if let error = playerStore.playbackError {
-                playbackErrorView(error)
-            } else {
-                ContentUnavailableView(
-                    "选择剧集播放",
-                    systemImage: "play.circle",
-                    description: Text("从详情页面选择一个剧集开始播放")
-                )
+        VStack(spacing: 10) {
+            Group {
+                if let player = playerStore.player {
+                    VideoPlayer(player: player)
+                        .aspectRatio(contentMode: .fit)
+                } else if let error = playerStore.playbackError {
+                    playbackErrorView(error)
+                } else {
+                    ContentUnavailableView(
+                        "选择剧集播放",
+                        systemImage: "play.circle",
+                        description: Text("从详情页面选择一个剧集开始播放")
+                    )
+                }
+            }
+
+            if playerStore.currentResult != nil {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text(playerStore.currentResult?.title ?? "")
+                            .font(.headline)
+                            .lineLimit(1)
+                        Spacer()
+                        Text("\(PlayRecord.formatForDisplay(playerStore.playTime)) / \(PlayRecord.formatForDisplay(playerStore.totalTime))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    PlayerSourcesView(playerStore: playerStore)
+                    PlayerEpisodesView(playerStore: playerStore)
+                }
+                .padding(.horizontal)
             }
         }
     }
@@ -47,5 +62,18 @@ struct PlayerView: View {
             }
         }
         .padding()
+    }
+}
+
+private extension PlayRecord {
+    static func formatForDisplay(_ seconds: Int) -> String {
+        let clamped = max(seconds, 0)
+        let hours = clamped / 3600
+        let minutes = (clamped % 3600) / 60
+        let seconds = clamped % 60
+        if hours > 0 {
+            return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+        }
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 }

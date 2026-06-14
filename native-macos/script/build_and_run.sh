@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 NATIVE_DIR="$REPO_ROOT/native-macos"
 
 if [[ ! -d "$NATIVE_DIR" ]]; then
@@ -40,6 +40,8 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << 'PLIST'
     <string>Selene</string>
     <key>CFBundleDisplayName</key>
     <string>Selene</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleVersion</key>
@@ -57,10 +59,28 @@ PLIST
 # Build icon set (use repo logo as source)
 ICON_SRC="$REPO_ROOT/logo.png"
 if [[ -f "$ICON_SRC" ]]; then
-    echo "Note: App icon setup requires iconutil or manual icns creation"
+    ICONSET="$APP_BUNDLE/Contents/Resources/AppIcon.iconset"
+    mkdir -p "$ICONSET"
+    sips -z 16 16 "$ICON_SRC" --out "$ICONSET/icon_16x16.png" >/dev/null
+    sips -z 32 32 "$ICON_SRC" --out "$ICONSET/icon_16x16@2x.png" >/dev/null
+    sips -z 32 32 "$ICON_SRC" --out "$ICONSET/icon_32x32.png" >/dev/null
+    sips -z 64 64 "$ICON_SRC" --out "$ICONSET/icon_32x32@2x.png" >/dev/null
+    sips -z 128 128 "$ICON_SRC" --out "$ICONSET/icon_128x128.png" >/dev/null
+    sips -z 256 256 "$ICON_SRC" --out "$ICONSET/icon_128x128@2x.png" >/dev/null
+    sips -z 256 256 "$ICON_SRC" --out "$ICONSET/icon_256x256.png" >/dev/null
+    sips -z 512 512 "$ICON_SRC" --out "$ICONSET/icon_256x256@2x.png" >/dev/null
+    sips -z 512 512 "$ICON_SRC" --out "$ICONSET/icon_512x512.png" >/dev/null
+    sips -z 1024 1024 "$ICON_SRC" --out "$ICONSET/icon_512x512@2x.png" >/dev/null
+    iconutil -c icns "$ICONSET" -o "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+    rm -rf "$ICONSET"
+    echo "App icon created from: $ICON_SRC"
 fi
 
 echo "App bundle created at: $APP_BUNDLE"
+
+if [[ "${PACKAGE_ONLY:-}" == "true" ]]; then
+    exit 0
+fi
 
 # Handle verification flag
 if [[ "${VERIFY:-}" == "true" ]]; then

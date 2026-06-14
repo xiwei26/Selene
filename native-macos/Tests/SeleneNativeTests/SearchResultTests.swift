@@ -51,8 +51,8 @@ final class SearchResultTests: XCTestCase {
 
         let result = try JSONDecoder().decode(SearchResult.self, from: json)
         XCTAssertEqual(result.id, "123")
-        XCTAssertEqual(result.description, "")
-        XCTAssertEqual(result.typeName, "")
+        XCTAssertNil(result.description)
+        XCTAssertNil(result.typeName)
         XCTAssertNil(result.doubanID)
     }
 

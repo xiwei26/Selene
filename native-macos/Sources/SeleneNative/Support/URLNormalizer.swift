@@ -8,21 +8,23 @@ enum URLNormalizer {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
-        // Try with https:// prefix
-        if !trimmed.hasPrefix("http://") && !trimmed.hasPrefix("https://") {
-            let httpsURL = URL(string: "https://\(trimmed)")
-            if let httpsURL, httpsURL.host != nil {
-                return httpsURL
-            }
-            // Try http for localhost-like inputs
-            let httpURL = URL(string: "http://\(trimmed)")
-            if let httpURL, httpURL.host != nil {
-                return httpURL
-            }
-            return nil
+        if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") {
+            let url = URL(string: trimmed)
+            return url?.host == nil ? nil : url
         }
 
-        // Already has a scheme
-        return URL(string: trimmed)
+        guard !trimmed.contains("://") else { return nil }
+
+        let scheme = isLocalhost(trimmed) ? "http" : "https"
+        let url = URL(string: "\(scheme)://\(trimmed)")
+        return url?.host == nil ? nil : url
+    }
+
+    private static func isLocalhost(_ input: String) -> Bool {
+        guard let hostPort = input.split(whereSeparator: { "/?#".contains($0) }).first else {
+            return false
+        }
+
+        return hostPort == "localhost" || hostPort.hasPrefix("localhost:")
     }
 }

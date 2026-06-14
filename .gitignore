@@ -102,6 +102,7 @@ android/key.properties
 # macOS specific
 **/macos/Flutter/GeneratedPluginRegistrant.swift
 **/macos/Flutter/ephemeral/
+native-macos/*.app/
 
 # Web specific
 **/web/flutter_service_worker.js
