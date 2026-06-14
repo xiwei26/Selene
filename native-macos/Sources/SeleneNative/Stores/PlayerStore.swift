@@ -132,6 +132,7 @@ final class PlayerStore {
         invalidateObservers()
         currentEpisodeURL = nil
         playbackError = nil
+        pendingSeekTime = nil
         playTime = 0
         totalTime = 0
     }

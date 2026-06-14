@@ -60,6 +60,7 @@ struct HomeView: View {
                         )
                         .frame(width: 260)
                         .onTapGesture { onPlayRecord?(record) }
+                    }
                 }
             }
         }

@@ -125,7 +125,10 @@ struct MainView: View {
         if isPlaying {
             PlayerScreen(
                 playerStore: playerStore,
-                onClose: { isPlaying = false }
+                onClose: {
+                    playerStore.stop()
+                    isPlaying = false
+                }
             )
         } else {
             switch selection ?? .search {
