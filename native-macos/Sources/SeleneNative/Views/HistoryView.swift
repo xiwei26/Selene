@@ -3,6 +3,7 @@ import SwiftUI
 struct HistoryView: View {
     let historyStore: HistoryStore
     let provider: ContentProvider
+    let onPlayRecord: ((PlayRecord) -> Void)?
 
     var body: some View {
         Group {
@@ -18,6 +19,7 @@ struct HistoryView: View {
                         subtitle: "第\(record.index + 1)集 \(record.formattedPlayTime) / \(record.formattedTotalTime)",
                         progress: record.progressPercentage
                     )
+                    .onTapGesture { onPlayRecord?(record) }
                 }
             }
         }

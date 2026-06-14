@@ -3,6 +3,7 @@ import SwiftUI
 struct FavoritesView: View {
     let favoritesStore: FavoritesStore
     let provider: ContentProvider
+    let onPlayRecord: ((PlayRecord) -> Void)?
 
     var body: some View {
         Group {
@@ -17,6 +18,23 @@ struct FavoritesView: View {
                         year: item.year,
                         subtitle: "共\(item.totalEpisodes)集"
                     )
+                    .onTapGesture {
+                        let record = PlayRecord(
+                            id: item.id,
+                            source: item.source,
+                            title: item.title,
+                            sourceName: item.sourceName,
+                            year: item.year,
+                            cover: item.cover,
+                            index: 0,
+                            totalEpisodes: item.totalEpisodes,
+                            playTime: 0,
+                            totalTime: 0,
+                            saveTime: item.saveTime,
+                            searchTitle: item.title
+                        )
+                        onPlayRecord?(record)
+                    }
                 }
             }
         }

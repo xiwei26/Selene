@@ -4,6 +4,7 @@ struct HomeView: View {
     let historyStore: HistoryStore
     let doubanProvider: DoubanProviding
     let bangumiProvider: BangumiProviding
+    let onPlayRecord: ((PlayRecord) -> Void)?
 
     @State private var hotMovies: [DoubanMovie] = []
     @State private var hotTVShows: [DoubanMovie] = []
@@ -58,7 +59,7 @@ struct HomeView: View {
                             progress: record.progressPercentage
                         )
                         .frame(width: 260)
-                    }
+                        .onTapGesture { onPlayRecord?(record) }
                 }
             }
         }
