@@ -13,6 +13,7 @@ final class PlayerStore {
     var isEpisodeReversed: Bool = false
     var playTime: Int = 0
     var totalTime: Int = 0
+    var pendingSeekTime: Int?
 
     @ObservationIgnored private var playerObserver: NSKeyValueObservation?
     @ObservationIgnored private var timeObserver: Any?
@@ -119,6 +120,11 @@ final class PlayerStore {
                     self?.playbackError = self?.playerItemErrorDescription(item.error)
                 } else if item.status == .readyToPlay {
                     self?.totalTime = Self.seconds(from: item.duration)
+                    if let seekTime = self?.pendingSeekTime {
+                        let target = CMTime(seconds: Double(seekTime), preferredTimescale: 600)
+                        self?.player?.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+                        self?.pendingSeekTime = nil
+                    }
                 }
             }
         }
