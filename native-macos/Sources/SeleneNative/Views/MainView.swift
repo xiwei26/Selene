@@ -49,12 +49,26 @@ struct MainView: View {
     @State private var bangumiProvider = BangumiAPIClient()
     @State private var liveStore = LiveStore()
     @State private var liveProvider = LiveServiceClient()
+    @State private var isPlaying = false
 
     init() {
         let placeholderURL = URL(string: "https://example.com")!
         let placeholderProvider = ServerAPIClient(baseURL: placeholderURL)
         _provider = State(initialValue: placeholderProvider)
         _searchStore = State(initialValue: SearchStore(provider: placeholderProvider))
+    }
+
+    @MainActor
+    private func playRecord(_ record: PlayRecord) {
+        guard sessionStore.session != nil else { return }
+        playerStore.currentSourceResults = []
+        playerStore.stop()
+        Task {
+            await playerStore.loadDetailAndPlay(record: record, provider: provider)
+            if playerStore.playbackError == nil {
+                isPlaying = true
+            }
+        }
     }
 
     var body: some View {
@@ -108,42 +122,58 @@ struct MainView: View {
 
     @ViewBuilder
     private var contentView: some View {
-        switch selection ?? .search {
-        case .home:
-            HomeView(
-                historyStore: historyStore,
-                doubanProvider: doubanProvider,
-                bangumiProvider: bangumiProvider
-            )
-        case .search:
-            SearchResultsView(
-                searchStore: searchStore,
+        if isPlaying {
+            PlayerScreen(
                 playerStore: playerStore,
-                provider: provider,
-                favoritesStore: favoritesStore,
-                historyStore: historyStore,
-                session: sessionStore.session
+                onClose: { isPlaying = false }
             )
-        case .movie:
-            CategoryView(category: .movie, doubanProvider: doubanProvider, bangumiProvider: bangumiProvider)
-        case .tv:
-            CategoryView(category: .tv, doubanProvider: doubanProvider, bangumiProvider: bangumiProvider)
-        case .anime:
-            CategoryView(category: .anime, doubanProvider: doubanProvider, bangumiProvider: bangumiProvider)
-        case .show:
-            CategoryView(category: .show, doubanProvider: doubanProvider, bangumiProvider: bangumiProvider)
-        case .live:
-            LiveScreenView(liveStore: liveStore, provider: liveProvider)
-        case .favorites:
-            FavoritesView(favoritesStore: favoritesStore, provider: provider)
-        case .history:
-            HistoryView(historyStore: historyStore, provider: provider)
-        case .settings:
-            SettingsView(
-                sessionStore: sessionStore,
-                themeStore: themeStore,
-                versionService: VersionService()
-            )
+        } else {
+            switch selection ?? .search {
+            case .home:
+                HomeView(
+                    historyStore: historyStore,
+                    doubanProvider: doubanProvider,
+                    bangumiProvider: bangumiProvider,
+                    onPlayRecord: playRecord
+                )
+            case .search:
+                SearchResultsView(
+                    searchStore: searchStore,
+                    playerStore: playerStore,
+                    provider: provider,
+                    favoritesStore: favoritesStore,
+                    historyStore: historyStore,
+                    session: sessionStore.session
+                )
+            case .movie:
+                CategoryView(category: .movie, doubanProvider: doubanProvider, bangumiProvider: bangumiProvider)
+            case .tv:
+                CategoryView(category: .tv, doubanProvider: doubanProvider, bangumiProvider: bangumiProvider)
+            case .anime:
+                CategoryView(category: .anime, doubanProvider: doubanProvider, bangumiProvider: bangumiProvider)
+            case .show:
+                CategoryView(category: .show, doubanProvider: doubanProvider, bangumiProvider: bangumiProvider)
+            case .live:
+                LiveScreenView(liveStore: liveStore, provider: liveProvider)
+            case .favorites:
+                FavoritesView(
+                    favoritesStore: favoritesStore,
+                    provider: provider,
+                    onPlayRecord: playRecord
+                )
+            case .history:
+                HistoryView(
+                    historyStore: historyStore,
+                    provider: provider,
+                    onPlayRecord: playRecord
+                )
+            case .settings:
+                SettingsView(
+                    sessionStore: sessionStore,
+                    themeStore: themeStore,
+                    versionService: VersionService()
+                )
+            }
         }
     }
 
