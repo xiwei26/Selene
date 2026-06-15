@@ -11,7 +11,7 @@ struct LivePlayerView: View {
         HSplitView {
             VStack(spacing: 0) {
                 if let player {
-                    VideoPlayer(player: player)
+                    NativeVideoPlayerView(player: player)
                         .onDisappear {
                             player.pause()
                         }

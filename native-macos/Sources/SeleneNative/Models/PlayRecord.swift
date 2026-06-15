@@ -24,6 +24,22 @@ struct PlayRecord: Identifiable, Codable, Hashable {
         case searchTitle = "search_title"
     }
 
+    var itemId: String {
+        splitKey(id).itemId
+    }
+
+    var fullId: String {
+        id
+    }
+
+    var episodeIndex: Int {
+        max(index - 1, 0)
+    }
+
+    var episodeNumber: Int {
+        max(index, 1)
+    }
+
     var progressPercentage: Double {
         guard totalTime > 0 else { return 0 }
         return min(max(Double(playTime) / Double(totalTime), 0), 1)

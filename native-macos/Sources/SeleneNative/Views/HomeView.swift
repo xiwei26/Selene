@@ -50,16 +50,21 @@ struct HomeView: View {
             } else {
                 horizontalCards {
                     ForEach(historyStore.playRecords.prefix(10)) { record in
-                        VideoCardView(
-                            title: record.title,
-                            poster: record.cover,
-                            sourceName: record.sourceName,
-                            year: record.year,
-                            subtitle: "第\(record.index + 1)集",
-                            progress: record.progressPercentage
-                        )
-                        .frame(width: 260)
-                        .onTapGesture { onPlayRecord?(record) }
+                        Button {
+                            onPlayRecord?(record)
+                        } label: {
+                            VideoCardView(
+                                title: record.title,
+                                poster: record.cover,
+                                sourceName: record.sourceName,
+                                year: record.year,
+                                subtitle: "第\(record.episodeNumber)集",
+                                progress: record.progressPercentage
+                            )
+                            .frame(width: 260)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }

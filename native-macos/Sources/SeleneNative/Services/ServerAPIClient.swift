@@ -150,7 +150,7 @@ final class ServerAPIClient: ContentProvider, Sendable {
         _ = try await performDataRequest(
             path: "/api/playrecords",
             method: "POST",
-            body: ["key": record.id, "record": record.toJson()]
+            body: ["key": "\(record.source)+\(record.itemId)", "record": record.toJson()]
         )
     }
 

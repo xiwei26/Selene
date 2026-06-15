@@ -119,6 +119,50 @@ final class ReviewFixesTests: XCTestCase {
         XCTAssertEqual(first, second)
         XCTAssertEqual(first, "https://example.com/live.m3u")
     }
+
+    func testPlayerStoreLoadsHistoryRecordWithOriginalItemID() async {
+        let provider = CapturingDetailProvider()
+        let record = PlayRecord(
+            id: "source-a+video-1",
+            source: "source-a",
+            title: "Video",
+            sourceName: "Source A",
+            year: "2024",
+            cover: "",
+            index: 1,
+            totalEpisodes: 2,
+            playTime: 30,
+            totalTime: 120,
+            saveTime: 1,
+            searchTitle: "Video"
+        )
+        let store = PlayerStore()
+
+        await store.loadDetailAndPlay(record: record, provider: provider)
+
+        XCTAssertEqual(provider.requestedSource, "source-a")
+        XCTAssertEqual(provider.requestedID, "video-1")
+        XCTAssertEqual(store.currentEpisodeIndex, 0)
+        XCTAssertEqual(store.currentEpisodeURL?.absoluteString, "https://example.com/1.mp4")
+    }
+
+    func testPlayerStoreSavesPlayRecordWithOneBasedEpisodeNumber() {
+        let store = PlayerStore()
+        let result = SearchResult(
+            id: "video-1",
+            title: "Video",
+            poster: "",
+            episodes: ["https://example.com/1.mp4"],
+            episodeTitles: [],
+            source: "source-a",
+            sourceName: "Source A",
+            year: "2024"
+        )
+
+        store.loadEpisode(url: URL(string: "https://example.com/1.mp4")!, result: result, index: 0)
+
+        XCTAssertEqual(store.makePlayRecord()?.index, 1)
+    }
 }
 
 final class RequestCaptureURLProtocol: URLProtocol {
@@ -149,6 +193,45 @@ private struct EmptyContentProvider: ContentProvider {
     func login(username: String, password: String) async throws -> LoginSession { throw APIError.unknown }
     func search(query: String) async throws -> [SearchResult] { [] }
     func detail(source: String, id: String) async throws -> SearchResult? { nil }
+    func searchResources() async throws -> [SearchResource] { [] }
+    func getFavorites() async throws -> [FavoriteItem] { [] }
+    func addFavorite(source: String, id: String, data: [String: Any]) async throws {}
+    func removeFavorite(source: String, id: String) async throws {}
+    func savePlayRecord(_ record: PlayRecord) async throws {}
+    func deletePlayRecord(source: String, id: String) async throws {}
+    func clearPlayRecords() async throws {}
+    func getPlayRecords() async throws -> [PlayRecord] { [] }
+    func getSearchHistory() async throws -> [String] { [] }
+    func addSearchHistory(query: String) async throws {}
+    func deleteSearchHistory(query: String) async throws {}
+    func clearSearchHistory() async throws {}
+    func searchSuggestions(query: String) async throws -> [SearchSuggestion] { [] }
+    func getLiveSources() async throws -> [LiveSource] { [] }
+    func getLiveChannels(sourceKey: String) async throws -> [LiveChannel] { [] }
+    func getLiveEPG(tvgId: String, sourceKey: String) async throws -> EpgData? { nil }
+    func sseSearchURL(query: String) -> URL? { nil }
+}
+
+private final class CapturingDetailProvider: ContentProvider, @unchecked Sendable {
+    var requestedSource: String?
+    var requestedID: String?
+
+    func login(username: String, password: String) async throws -> LoginSession { throw APIError.unknown }
+    func search(query: String) async throws -> [SearchResult] { [] }
+    func detail(source: String, id: String) async throws -> SearchResult? {
+        requestedSource = source
+        requestedID = id
+        return SearchResult(
+            id: id,
+            title: "Video",
+            poster: "",
+            episodes: ["https://example.com/1.mp4", "https://example.com/2.mp4"],
+            episodeTitles: [],
+            source: source,
+            sourceName: "Source A",
+            year: "2024"
+        )
+    }
     func searchResources() async throws -> [SearchResource] { [] }
     func getFavorites() async throws -> [FavoriteItem] { [] }
     func addFavorite(source: String, id: String, data: [String: Any]) async throws {}

@@ -84,25 +84,68 @@ final class PlayerStore {
 
     func loadDetailAndPlay(record: PlayRecord, provider: ContentProvider) async {
         do {
-            guard let result = try await provider.detail(source: record.source, id: record.id) else {
+            // Step 1: Try exact detail lookup first
+            guard let result = try await provider.detail(source: record.source, id: record.itemId) else {
                 playbackError = "未找到该视频详情"
                 return
             }
             currentSourceResults = [result]
 
-            guard result.episodes.indices.contains(record.index),
-                  let url = URL(string: result.episodes[record.index]) else {
+            let episodeIndex = record.episodeIndex
+            if result.episodes.indices.contains(episodeIndex),
+               let url = URL(string: result.episodes[episodeIndex]) {
+                // Direct match works — play it
+                currentResult = result
+                currentEpisodeIndex = episodeIndex
+                replaceItem(url: url, result: result, index: episodeIndex)
+                if record.playTime > 0 {
+                    pendingSeekTime = record.playTime
+                }
+                play()
+                return
+            }
+
+            // Step 2: Detail result didn't have the episode — try searching by title
+            // to find all available sources, then match by source+id
+            playbackError = nil
+            let searchQuery = record.searchTitle.isEmpty ? record.title : record.searchTitle
+            guard !searchQuery.isEmpty else {
                 playbackError = "剧集链接不可用"
                 return
             }
 
-            currentResult = result
-            currentEpisodeIndex = record.index
-            replaceItem(url: url, result: result, index: record.index)
-            if record.playTime > 0 {
-                pendingSeekTime = record.playTime
+            let searchResults = try await provider.search(query: searchQuery)
+
+            // Try to find the exact source+id match among search results
+            if let matched = searchResults.first(where: {
+                $0.source == record.source && $0.id == record.itemId
+            }), matched.episodes.indices.contains(episodeIndex),
+               let url = URL(string: matched.episodes[episodeIndex]) {
+                currentSourceResults = [matched]
+                currentResult = matched
+                currentEpisodeIndex = episodeIndex
+                replaceItem(url: url, result: matched, index: episodeIndex)
+                if record.playTime > 0 {
+                    pendingSeekTime = record.playTime
+                }
+                play()
+                return
             }
-            play()
+
+            // Step 3: Fallback — try any search result that has episodes
+            // and play from episode 0 (first episode)
+            if let fallback = searchResults.first(where: { !$0.episodes.isEmpty }),
+               let url = URL(string: fallback.episodes[0]) {
+                currentSourceResults = [fallback]
+                currentResult = fallback
+                currentEpisodeIndex = 0
+                replaceItem(url: url, result: fallback, index: 0)
+                play()
+                return
+            }
+
+            // Everything failed
+            playbackError = "剧集链接不可用"
         } catch {
             playbackError = "获取视频详情失败: \(error.localizedDescription)"
         }
@@ -117,7 +160,7 @@ final class PlayerStore {
             sourceName: result.sourceName,
             year: result.year,
             cover: result.poster,
-            index: currentEpisodeIndex,
+            index: currentEpisodeIndex + 1,
             totalEpisodes: result.episodes.count,
             playTime: playTime,
             totalTime: totalTime,

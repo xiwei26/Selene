@@ -54,6 +54,6 @@ final class HistoryStore {
 
     func resumePosition(source: String, id: String) -> (index: Int, playTime: Int)? {
         guard let record = recordFor(source: source, id: id), record.playTime > 0 else { return nil }
-        return (record.index, record.playTime)
+        return (record.episodeIndex, record.playTime)
     }
 }

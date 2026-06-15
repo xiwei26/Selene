@@ -16,7 +16,7 @@ struct HistoryView: View {
                         poster: record.cover,
                         sourceName: record.sourceName,
                         year: record.year,
-                        subtitle: "第\(record.index + 1)集 \(record.formattedPlayTime) / \(record.formattedTotalTime)",
+                        subtitle: "第\(record.episodeNumber)集 \(record.formattedPlayTime) / \(record.formattedTotalTime)",
                         progress: record.progressPercentage
                     )
                     .onTapGesture { onPlayRecord?(record) }

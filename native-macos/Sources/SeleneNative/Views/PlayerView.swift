@@ -8,7 +8,7 @@ struct PlayerView: View {
         VStack(spacing: 10) {
             Group {
                 if let player = playerStore.player {
-                    VideoPlayer(player: player)
+                    NativeVideoPlayerView(player: player)
                         .aspectRatio(contentMode: .fit)
                 } else if let error = playerStore.playbackError {
                     playbackErrorView(error)

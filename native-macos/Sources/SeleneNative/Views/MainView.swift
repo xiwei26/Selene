@@ -63,11 +63,24 @@ struct MainView: View {
         guard sessionStore.session != nil else { return }
         playerStore.currentSourceResults = []
         playerStore.stop()
+        isPlaying = true
         Task {
             await playerStore.loadDetailAndPlay(record: record, provider: provider)
-            if playerStore.playbackError == nil {
-                isPlaying = true
-            }
+        }
+    }
+
+    @MainActor
+    private func closePlayer() {
+        saveCurrentRecord()
+        playerStore.stop()
+        isPlaying = false
+    }
+
+    @MainActor
+    private func saveCurrentRecord() {
+        guard let record = playerStore.makePlayRecord() else { return }
+        Task {
+            await historyStore.saveRecord(record, provider: provider)
         }
     }
 
@@ -125,10 +138,7 @@ struct MainView: View {
         if isPlaying {
             PlayerScreen(
                 playerStore: playerStore,
-                onClose: {
-                    playerStore.stop()
-                    isPlaying = false
-                }
+                onClose: closePlayer
             )
         } else {
             switch selection ?? .search {

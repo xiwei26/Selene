@@ -26,7 +26,7 @@ struct FavoritesView: View {
                             sourceName: item.sourceName,
                             year: item.year,
                             cover: item.cover,
-                            index: 0,
+                            index: 1,
                             totalEpisodes: item.totalEpisodes,
                             playTime: 0,
                             totalTime: 0,
