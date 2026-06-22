@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>12.0</LangVersion>
+    <!-- Required by Windows App SDK build targets even though this app publishes unpackaged/self-contained. -->
+    <EnableMsixTooling>true</EnableMsixTooling>
+  </PropertyGroup>
+</Project>
