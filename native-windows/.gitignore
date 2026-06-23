@@ -1,0 +1,19 @@
+# Build folders
+bin/
+obj/
+publish/
+
+# Test results
+TestResults/
+
+# Visual Studio user-specific/cache files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build artifacts
+AppPackages/
+BundleArtifacts/
+
