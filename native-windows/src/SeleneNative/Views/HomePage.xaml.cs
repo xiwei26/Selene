@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using System.Linq;
 using SeleneNative.Core.Models;
 using SeleneNative.Core.ViewModels;
 
@@ -19,7 +20,19 @@ public sealed partial class HomePage : UserControl
     public void Build(HomeViewModel viewModel)
     {
         ContentStack.Children.Clear();
-        ContentStack.Children.Add(UiHelpers.PageHeader("Selene", "继续观看、热门内容与今日番组"));
+
+        var loginVm = App.Services.GetService(typeof(LoginViewModel)) as LoginViewModel;
+        var username = loginVm?.Session?.Username ?? "xiwei26";
+        ContentStack.Children.Add(UiHelpers.CreateGreetingBanner(username));
+
+        if (viewModel.HotMovies != null && viewModel.HotMovies.Any())
+        {
+            var featured = viewModel.HotMovies.First();
+            ContentStack.Children.Add(UiHelpers.CreateHeroSection(featured,
+                () => DoubanMovieClicked?.Invoke(featured, "movie"),
+                () => DoubanMovieClicked?.Invoke(featured, "movie")
+            ));
+        }
 
         if (!string.IsNullOrWhiteSpace(viewModel.ErrorMessage))
         {

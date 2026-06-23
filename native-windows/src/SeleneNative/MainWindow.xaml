@@ -6,5 +6,5 @@
     xmlns:local="using:SeleneNative"
     Title="Selene">
 
-    <Grid x:Name="Root" />
+    <Grid x:Name="Root" Background="#000000" RequestedTheme="Dark" />
 </Window>

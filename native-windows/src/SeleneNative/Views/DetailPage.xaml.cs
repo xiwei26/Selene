@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Windows.UI;
 using System.Runtime.CompilerServices;
 using SeleneNative.Core.Models;
 using SeleneNative.Core.Services;
@@ -51,17 +52,38 @@ public sealed partial class DetailPage : UserControl
         var headerPanel = new StackPanel { Spacing = 8 };
         headerPanel.Children.Add(UiHelpers.PageHeader(result.Title, $"{result.SourceName}  {result.Year}".Trim()));
 
-        // Douban rating
+        // Douban rating badge
         if (_vm.DoubanInfo is not null)
         {
-            var ratingPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            ratingPanel.Children.Add(new TextBlock
+            var rateStr = _vm.DoubanInfo.Rate;
+            var hasRate = !string.IsNullOrWhiteSpace(rateStr) && rateStr != "0";
+            var ratingBadge = new Border
             {
-                Text = string.IsNullOrWhiteSpace(_vm.DoubanInfo.Rate) ? "暂无评分" : $"豆瓣 {_vm.DoubanInfo.Rate}",
-                FontSize = 14,
-                Foreground = new SolidColorBrush(Microsoft.UI.Colors.Orange),
-            });
-            headerPanel.Children.Add(ratingPanel);
+                Background = new SolidColorBrush(Color.FromArgb(153, 0, 0, 0)),
+                BorderBrush = new SolidColorBrush(hasRate ? Color.FromArgb(255, 255, 215, 0) : Color.FromArgb(128, 128, 128, 128)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(8, 2, 8, 2),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(0, 4, 0, 4),
+                Child = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 4,
+                    Children =
+                    {
+                        new FontIcon { Glyph = "\uE735", FontSize = 10, Foreground = new SolidColorBrush(hasRate ? Color.FromArgb(255, 255, 215, 0) : Color.FromArgb(128, 128, 128, 128)) },
+                        new TextBlock 
+                        { 
+                            Text = hasRate ? $"豆瓣 {rateStr}" : "暂无评分", 
+                            FontSize = 11, 
+                            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, 
+                            Foreground = new SolidColorBrush(hasRate ? Color.FromArgb(255, 255, 215, 0) : Color.FromArgb(128, 128, 128, 128)) 
+                        }
+                    }
+                }
+            };
+            headerPanel.Children.Add(ratingBadge);
         }
 
         ContentStack.Children.Add(headerPanel);
