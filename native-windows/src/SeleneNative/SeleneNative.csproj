@@ -13,6 +13,7 @@
     <GenerateTestArtifacts>false</GenerateTestArtifacts>
     <MrtCoreDisableGeneration>true</MrtCoreDisableGeneration>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <ApplicationIcon>logo.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

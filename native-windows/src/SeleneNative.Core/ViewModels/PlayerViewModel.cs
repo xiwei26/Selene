@@ -90,10 +90,10 @@ public sealed partial class PlayerViewModel : ObservableObject, IDisposable
 
         if (e.State == MediaPlaybackState.Playing)
         {
-            TotalTime = _player.Length;
+            RefreshTotalTime();
             if (PendingSeekTime is int seek)
             {
-                _player.Position = seek;
+                SeekTo(seek);
                 PendingSeekTime = null;
             }
             PlaybackError = null;
@@ -107,6 +107,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IDisposable
     private void OnPositionChanged(object? sender, MediaPositionChangedEventArgs e)
     {
         if (_isInternalReset) return;
+        RefreshTotalTime();
         PlayTime = e.Position;
     }
 
@@ -115,9 +116,28 @@ public sealed partial class PlayerViewModel : ObservableObject, IDisposable
         PlaybackError = e.Message;
     }
 
+    private void RefreshTotalTime()
+    {
+        var length = _player.Length;
+        if (length > 0)
+        {
+            TotalTime = length;
+        }
+    }
+
     public void Play() => _player.Play();
 
     public void Pause() => _player.Pause();
+
+    public void SeekTo(double seconds)
+    {
+        RefreshTotalTime();
+        if (TotalTime <= 0) return;
+
+        var target = Math.Clamp(seconds, 0, TotalTime);
+        _player.Position = target;
+        PlayTime = target;
+    }
 
     public void Stop()
     {

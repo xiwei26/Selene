@@ -90,7 +90,13 @@ public sealed partial class MainWindow : Window
         _categoryPage.BangumiItemClicked += OnHomeBangumiItemClicked;
         _loginPage.SessionChanged += OnLoginSessionChangedAsync;
 
-        _contentHost = new ContentControl();
+        _contentHost = new ContentControl
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            VerticalContentAlignment = VerticalAlignment.Stretch,
+        };
 
         _navigationView = new NavigationView
         {
@@ -100,6 +106,8 @@ public sealed partial class MainWindow : Window
             AlwaysShowHeader = false,
             OpenPaneLength = 280,
             CompactPaneLength = 56,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
         };
 
         // Custom logo header

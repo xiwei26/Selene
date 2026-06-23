@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using SeleneNative.Core.Models;
 using SeleneNative.Core.ViewModels;
@@ -10,6 +11,8 @@ public sealed partial class PlayerPage : UserControl
 {
     private PlayerViewModel? _viewModel;
     private SearchResult? _seed;
+    private bool _isSeeking;
+    private bool _isSyncingSlider;
 
     public event EventHandler? CloseRequested;
     public event Func<PlayRecord, Task>? SaveRecordRequested;
@@ -19,6 +22,14 @@ public sealed partial class PlayerPage : UserControl
         InitializeComponent();
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+
+        BackButton.Click += OnBackButtonClick;
+        RetryButton.Click += OnRetryButtonClick;
+        ToggleOrderButton.Click += OnToggleOrderButtonClick;
+        SeekSlider.ValueChanged += OnSeekSliderValueChanged;
+        SeekSlider.PointerPressed += OnSeekSliderPointerPressed;
+        SeekSlider.PointerReleased += OnSeekSliderPointerReleased;
+        SeekSlider.PointerCanceled += OnSeekSliderPointerReleased;
     }
 
     public void Bind(PlayerViewModel viewModel)
@@ -51,13 +62,6 @@ public sealed partial class PlayerPage : UserControl
     {
         if (_viewModel is null) return;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
-        BackButton.Click += (_, _) => CloseRequested?.Invoke(this, EventArgs.Empty);
-        RetryButton.Click += (_, _) => _viewModel?.Retry();
-        ToggleOrderButton.Click += (_, _) =>
-        {
-            _viewModel?.ToggleEpisodeOrder();
-            BuildEpisodeRow();
-        };
         SyncState();
     }
 
@@ -80,6 +84,52 @@ public sealed partial class PlayerPage : UserControl
         }
     }
 
+    private void OnBackButtonClick(object sender, RoutedEventArgs e)
+    {
+        CloseRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnRetryButtonClick(object sender, RoutedEventArgs e)
+    {
+        _viewModel?.Retry();
+    }
+
+    private void OnToggleOrderButtonClick(object sender, RoutedEventArgs e)
+    {
+        _viewModel?.ToggleEpisodeOrder();
+        BuildEpisodeRow();
+    }
+
+    private void OnSeekSliderPointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (!SeekSlider.IsEnabled) return;
+        _isSeeking = true;
+    }
+
+    private void OnSeekSliderPointerReleased(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (!_isSeeking) return;
+        _isSeeking = false;
+        CommitSeek(SeekSlider.Value);
+    }
+
+    private void OnSeekSliderValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_isSyncingSlider) return;
+
+        PlayTimeText.Text = Format(e.NewValue);
+        if (!_isSeeking)
+        {
+            CommitSeek(e.NewValue);
+        }
+    }
+
+    private void CommitSeek(double seconds)
+    {
+        if (_viewModel is null || _viewModel.TotalTime <= 0) return;
+        _viewModel.SeekTo(seconds);
+    }
+
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         DispatcherQueue.TryEnqueue(() =>
@@ -99,7 +149,7 @@ public sealed partial class PlayerPage : UserControl
                     var index = _viewModel.CurrentEpisodeIndex;
                     var title = _seed.EpisodeTitles.Count > index && !string.IsNullOrWhiteSpace(_seed.EpisodeTitles[index])
                         ? _seed.EpisodeTitles[index]
-                        : $"第 {index + 1} 集";
+                        : $"第{index + 1}集";
                     SubtitleText.Text = title;
                     BuildEpisodeRow();
                 }
@@ -110,11 +160,23 @@ public sealed partial class PlayerPage : UserControl
     private void SyncState()
     {
         if (_viewModel is null) return;
-        var total = Math.Max(_viewModel.TotalTime, 0.0001);
-        var pos = Math.Clamp(_viewModel.PlayTime / total, 0, 1);
-        PlayProgress.Value = pos;
-        PlayTimeText.Text = Format(_viewModel.PlayTime);
-        TotalTimeText.Text = Format(_viewModel.TotalTime);
+
+        var total = Math.Max(_viewModel.TotalTime, 0);
+        var playTime = Math.Clamp(_viewModel.PlayTime, 0, total > 0 ? total : double.MaxValue);
+        var canSeek = total > 0;
+
+        SeekSlider.IsEnabled = canSeek;
+        SeekSlider.Maximum = canSeek ? total : 1;
+
+        if (!_isSeeking)
+        {
+            _isSyncingSlider = true;
+            SeekSlider.Value = canSeek ? playTime : 0;
+            _isSyncingSlider = false;
+            PlayTimeText.Text = Format(playTime);
+        }
+
+        TotalTimeText.Text = canSeek ? Format(total) : "--:--";
         ErrorBar.IsOpen = !string.IsNullOrWhiteSpace(_viewModel.PlaybackError);
         ErrorBar.Message = _viewModel.PlaybackError ?? string.Empty;
     }
@@ -142,7 +204,7 @@ public sealed partial class PlayerPage : UserControl
             if (index < 0 || index >= urls.Count) continue;
             var title = titles.Count > index && !string.IsNullOrWhiteSpace(titles[index])
                 ? titles[index]
-                : $"第 {index + 1} 集";
+                : $"第{index + 1}集";
             var isActive = index == (_viewModel?.CurrentEpisodeIndex ?? 0);
             var button = new Button { Content = title, Tag = index };
             if (isActive)

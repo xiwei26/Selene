@@ -42,6 +42,36 @@ public sealed class PlayerViewModelTests
     }
 
     [Fact]
+    public void SeekTo_ShouldClampAndUpdatePlayerPosition()
+    {
+        var player = new FakeMediaPlayer { LengthSeconds = 120 };
+        var vm = new PlayerViewModel(() => player);
+        vm.ReplaceItem("https://example.com/video.m3u8", NewResult("Test", "src1"), 0);
+        player.SimulateState(MediaPlaybackState.Playing);
+
+        vm.SeekTo(180);
+
+        Assert.Equal(120, player.Position, 1);
+        Assert.Equal(120, vm.PlayTime, 1);
+        Assert.Equal(120, vm.TotalTime, 1);
+    }
+
+    [Fact]
+    public void PositionChanged_ShouldRefreshTotalTime_WhenLengthArrivesLate()
+    {
+        var player = new FakeMediaPlayer();
+        var vm = new PlayerViewModel(() => player);
+        vm.ReplaceItem("https://example.com/video.m3u8", NewResult("Test", "src1"), 0);
+        player.SimulateState(MediaPlaybackState.Playing);
+
+        player.LengthSeconds = 120;
+        player.SimulatePosition(42);
+
+        Assert.Equal(42, vm.PlayTime, 1);
+        Assert.Equal(120, vm.TotalTime, 1);
+    }
+
+    [Fact]
     public void Retry_ShouldReloadAndPlay()
     {
         var player = new FakeMediaPlayer();

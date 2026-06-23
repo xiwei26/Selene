@@ -48,7 +48,7 @@ public sealed class LibVlcMediaPlayer : IMediaPlayer
         {
             lock (_gate)
             {
-                return _player is null ? 0 : Math.Max(0, _player.Length / 1000.0);
+                return Math.Max(0, GetLengthMillisecondsUnsafe() / 1000.0);
             }
         }
     }
@@ -64,10 +64,21 @@ public sealed class LibVlcMediaPlayer : IMediaPlayer
         }
         set
         {
+            var changed = false;
+            var target = 0.0;
             lock (_gate)
             {
-                if (_player is null || _player.Length <= 0) return;
-                _player.Position = (float)Math.Clamp(value * 1000.0 / _player.Length, 0, 1);
+                var lengthMs = GetLengthMillisecondsUnsafe();
+                if (_player is null || lengthMs <= 0) return;
+                var targetMs = Math.Clamp(value * 1000.0, 0, lengthMs);
+                _player.Time = (long)targetMs;
+                target = targetMs / 1000.0;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                PositionChanged?.Invoke(this, new MediaPositionChangedEventArgs(target));
             }
         }
     }
@@ -84,12 +95,15 @@ public sealed class LibVlcMediaPlayer : IMediaPlayer
             DetachPlayer();
             _media = new Media(_libVlc, new Uri(url));
             _player = new MediaPlayer(_media) { EnableHardwareDecoding = true };
+            _player.Scale = 0;
             _player.Playing += OnPlayingChanged;
             _player.Paused += OnPausedChanged;
             _player.Stopped += OnStoppedChanged;
             _player.EncounteredError += OnErrorEncountered;
             _player.EndReached += OnEndReached;
             _player.PositionChanged += OnNativePositionChanged;
+            _player.TimeChanged += OnNativeTimeChanged;
+            _player.LengthChanged += OnNativeLengthChanged;
             AttachCurrentPlayerToView();
         }
     }
@@ -155,6 +169,17 @@ public sealed class LibVlcMediaPlayer : IMediaPlayer
         _attachedView.MediaPlayer = _player;
     }
 
+    private long GetLengthMillisecondsUnsafe()
+    {
+        var playerLength = _player?.Length ?? 0;
+        if (playerLength > 0)
+        {
+            return playerLength;
+        }
+
+        return _media?.Duration ?? 0;
+    }
+
     private void DetachPlayer()
     {
         if (_player is not null)
@@ -165,6 +190,8 @@ public sealed class LibVlcMediaPlayer : IMediaPlayer
             _player.EncounteredError -= OnErrorEncountered;
             _player.EndReached -= OnEndReached;
             _player.PositionChanged -= OnNativePositionChanged;
+            _player.TimeChanged -= OnNativeTimeChanged;
+            _player.LengthChanged -= OnNativeLengthChanged;
             try { _player.Stop(); } catch { }
             if (_attachedView is not null)
             {
@@ -195,6 +222,18 @@ public sealed class LibVlcMediaPlayer : IMediaPlayer
         var length = Length;
         if (length <= 0) return;
         PositionChanged?.Invoke(this, new MediaPositionChangedEventArgs(e.Position * length));
+    }
+
+    private void OnNativeTimeChanged(object? sender, MediaPlayerTimeChangedEventArgs e)
+    {
+        if (e.Time < 0) return;
+        PositionChanged?.Invoke(this, new MediaPositionChangedEventArgs(e.Time / 1000.0));
+    }
+
+    private void OnNativeLengthChanged(object? sender, MediaPlayerLengthChangedEventArgs e)
+    {
+        if (e.Length <= 0) return;
+        PositionChanged?.Invoke(this, new MediaPositionChangedEventArgs(Position));
     }
 }
 
