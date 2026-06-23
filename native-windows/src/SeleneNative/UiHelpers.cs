@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.UI;
 using SeleneNative.Core.Models;
 
 namespace SeleneNative;
@@ -42,6 +43,193 @@ internal static class UiHelpers
             Grid.SetColumn(progressRing, 1);
             grid.Children.Add(progressRing);
         }
+
+        return grid;
+    }
+
+    public static UIElement CreateGreetingBanner(string username)
+    {
+        var grid = new Grid
+        {
+            MinHeight = 140,
+            Padding = new Thickness(24),
+            CornerRadius = new CornerRadius(12),
+            Margin = new Thickness(0, 8, 0, 16),
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new Windows.Foundation.Point(0, 0),
+                EndPoint = new Windows.Foundation.Point(1, 1),
+                GradientStops =
+                {
+                    new GradientStop { Color = Color.FromArgb(255, 99, 102, 241), Offset = 0.0 }, // #6366f1
+                    new GradientStop { Color = Color.FromArgb(255, 168, 85, 247), Offset = 0.5 },  // #a855f7
+                    new GradientStop { Color = Color.FromArgb(255, 236, 72, 153), Offset = 1.0 }   // #ec4899
+                }
+            }
+        };
+
+        var stack = new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Spacing = 4
+        };
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = $"晚上好，{username} 👋",
+            FontSize = 28,
+            FontWeight = Microsoft.UI.Text.FontWeights.ExtraBold,
+            Foreground = new SolidColorBrush(Colors.White)
+        });
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = "发现更多精彩影视内容 ✨",
+            FontSize = 15,
+            Foreground = new SolidColorBrush(Color.FromArgb(230, 255, 255, 255))
+        });
+
+        grid.Children.Add(stack);
+        return grid;
+    }
+
+    public static UIElement CreateHeroSection(DoubanMovie movie, Action onPlayClick, Action onInfoClick)
+    {
+        var grid = new Grid
+        {
+            Height = 380,
+            CornerRadius = new CornerRadius(12),
+            Margin = new Thickness(0, 0, 0, 16),
+            Background = new SolidColorBrush(Color.FromArgb(255, 17, 17, 17))
+        };
+
+        if (Uri.TryCreate(movie.Poster, UriKind.Absolute, out var uri))
+        {
+            grid.Children.Add(new Image
+            {
+                Source = new BitmapImage(uri),
+                Stretch = Stretch.UniformToFill,
+                Opacity = 0.5
+            });
+        }
+
+        var overlay = new Border
+        {
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new Windows.Foundation.Point(0, 0),
+                EndPoint = new Windows.Foundation.Point(0, 1),
+                GradientStops =
+                {
+                    new GradientStop { Color = Colors.Transparent, Offset = 0.0 },
+                    new GradientStop { Color = Color.FromArgb(180, 0, 0, 0), Offset = 0.6 },
+                    new GradientStop { Color = Colors.Black, Offset = 1.0 }
+                }
+            }
+        };
+        grid.Children.Add(overlay);
+
+        var contentGrid = new Grid
+        {
+            Padding = new Thickness(24),
+            VerticalAlignment = VerticalAlignment.Bottom
+        };
+
+        var stack = new StackPanel { Spacing = 10 };
+
+        var badgeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        if (!string.IsNullOrWhiteSpace(movie.Rate) && movie.Rate != "0")
+        {
+            var ratingBadge = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(153, 0, 0, 0)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(255, 255, 215, 0)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(8, 2, 8, 2),
+                Child = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 4,
+                    Children =
+                    {
+                        new FontIcon { Glyph = "\uE735", FontSize = 10, Foreground = new SolidColorBrush(Color.FromArgb(255, 255, 215, 0)) },
+                        new TextBlock { Text = movie.Rate, FontSize = 11, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromArgb(255, 255, 215, 0)) }
+                    }
+                }
+            };
+            badgeRow.Children.Add(ratingBadge);
+        }
+
+        if (!string.IsNullOrWhiteSpace(movie.Year))
+        {
+            badgeRow.Children.Add(new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(51, 255, 255, 255)),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(8, 2, 8, 2),
+                Child = new TextBlock { Text = movie.Year, FontSize = 11, Foreground = new SolidColorBrush(Colors.White) }
+            });
+        }
+
+        badgeRow.Children.Add(new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(51, 18, 200, 102)),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(8, 2, 8, 2),
+            Child = new TextBlock { Text = "电影", FontSize = 11, Foreground = new SolidColorBrush(Color.FromArgb(255, 18, 200, 102)) }
+        });
+
+        stack.Children.Add(badgeRow);
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = movie.Title,
+            FontSize = 36,
+            FontWeight = Microsoft.UI.Text.FontWeights.Black,
+            Foreground = new SolidColorBrush(Colors.White),
+            TextTrimming = TextTrimming.CharacterEllipsis
+        });
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = "今日推荐影片。Selene 为你精选优质好片，畅享视听盛宴。",
+            FontSize = 14,
+            Foreground = new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)),
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth = 550
+        });
+
+        var btnRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(0, 4, 0, 0) };
+        var playBtn = new Button
+        {
+            Content = "立即播放",
+            Background = new SolidColorBrush(Color.FromArgb(255, 18, 200, 102)),
+            Foreground = new SolidColorBrush(Colors.Black),
+            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+            Padding = new Thickness(20, 6, 20, 6),
+            CornerRadius = new CornerRadius(6)
+        };
+        playBtn.Click += (s, e) => onPlayClick();
+
+        var infoBtn = new Button
+        {
+            Content = "详情信息",
+            Background = new SolidColorBrush(Color.FromArgb(26, 255, 255, 255)),
+            Foreground = new SolidColorBrush(Colors.White),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(51, 255, 255, 255)),
+            Padding = new Thickness(20, 6, 20, 6),
+            CornerRadius = new CornerRadius(6)
+        };
+        infoBtn.Click += (s, e) => onInfoClick();
+
+        btnRow.Children.Add(playBtn);
+        btnRow.Children.Add(infoBtn);
+        stack.Children.Add(btnRow);
+
+        contentGrid.Children.Add(stack);
+        grid.Children.Add(contentGrid);
 
         return grid;
     }
@@ -292,7 +480,13 @@ internal static class UiHelpers
 
         var metadataRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         metadataRow.Children.Add(new TextBlock { Text = metadata, Foreground = SecondaryBrush(), FontSize = 12 });
-        metadataRow.Children.Add(new TextBlock { Text = subtitle, Foreground = SecondaryBrush(), FontSize = 12 });
+        
+        var ratingBrush = SecondaryBrush();
+        if (subtitle != null && (subtitle.StartsWith("评分") || subtitle.Contains("评分")))
+        {
+            ratingBrush = new SolidColorBrush(Color.FromArgb(255, 255, 215, 0));
+        }
+        metadataRow.Children.Add(new TextBlock { Text = subtitle, Foreground = ratingBrush, FontSize = 12 });
         card.Children.Add(metadataRow);
         return card;
     }
@@ -350,14 +544,29 @@ internal static class UiHelpers
         {
             Children.Add(content);
             Tapped += (s, e) => onClick();
+            
+            content.RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5);
+            var scale = new ScaleTransform();
+            content.RenderTransform = scale;
+
             PointerEntered += (s, e) =>
             {
                 ProtectedCursor = Microsoft.UI.Input.InputSystemCursor.Create(Microsoft.UI.Input.InputSystemCursorShape.Hand);
+                scale.ScaleX = 1.03;
+                scale.ScaleY = 1.03;
+            };
+
+            PointerExited += (s, e) =>
+            {
+                scale.ScaleX = 1.0;
+                scale.ScaleY = 1.0;
             };
         }
     }
 
-    public static Brush CardBrush() => new SolidColorBrush(Colors.Gray) { Opacity = 0.18 };
+    public static Brush CardBrush() => new SolidColorBrush(Color.FromArgb(255, 22, 29, 22));
 
-    public static Brush SecondaryBrush() => new SolidColorBrush(Colors.Gray);
+    public static Brush SecondaryBrush() => new SolidColorBrush(Color.FromArgb(255, 187, 203, 186));
+
+    public static Brush PrimaryBrush() => new SolidColorBrush(Color.FromArgb(255, 18, 200, 102));
 }

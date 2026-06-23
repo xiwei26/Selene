@@ -1,6 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.UI;
+using System.Linq;
 using SeleneNative.Core.Models;
 using SeleneNative.Core.Services;
 using SeleneNative.Core.ViewModels;
@@ -58,6 +62,7 @@ public sealed partial class MainWindow : Window
         _bangumiClient = _services.GetRequiredService<IBangumiClient>();
 
         InitializeComponent();
+        ExtendsContentIntoTitleBar = true;
         Root.Children.Add(BuildShell());
         Activated += OnFirstActivated;
     }
@@ -92,41 +97,129 @@ public sealed partial class MainWindow : Window
             PaneDisplayMode = NavigationViewPaneDisplayMode.Left,
             IsBackButtonVisible = NavigationViewBackButtonVisible.Collapsed,
             IsSettingsVisible = false,
-            OpenPaneLength = 220,
+            AlwaysShowHeader = false,
+            OpenPaneLength = 280,
             CompactPaneLength = 56,
-            Header = "首页",
         };
-        _navigationView.MenuItems.Add(NavItem("首页", "home", isSelected: true));
-        _navigationView.MenuItems.Add(NavItem("搜索", "search"));
-        _navigationView.MenuItems.Add(NavItem("电影", "movies"));
-        _navigationView.MenuItems.Add(NavItem("电视剧", "tv"));
-        _navigationView.MenuItems.Add(NavItem("动漫", "anime"));
-        _navigationView.MenuItems.Add(NavItem("综艺", "shows"));
-        _navigationView.MenuItems.Add(NavItem("直播", "live"));
+
+        // Custom logo header
+        var paneHeaderStack = new StackPanel
+        {
+            Spacing = 4,
+            Padding = new Thickness(16, 24, 16, 24)
+        };
+        paneHeaderStack.Children.Add(new TextBlock
+        {
+            Text = "Selene 影视基地",
+            FontSize = 22,
+            FontWeight = Microsoft.UI.Text.FontWeights.Black,
+            Foreground = new SolidColorBrush(Color.FromArgb(255, 18, 200, 102))
+        });
+        paneHeaderStack.Children.Add(new TextBlock
+        {
+            Text = "Media Enthusiast",
+            FontSize = 11,
+            Foreground = new SolidColorBrush(Color.FromArgb(255, 187, 203, 186)),
+            Opacity = 0.6
+        });
+        _navigationView.PaneHeader = paneHeaderStack;
+
+        _navigationView.MenuItems.Add(NavItem("首页", "home", Symbol.Home, isSelected: true));
+        _navigationView.MenuItems.Add(NavItem("搜索", "search", Symbol.Find));
+        _navigationView.MenuItems.Add(NavItem("电影", "movies", Symbol.Video));
+        _navigationView.MenuItems.Add(NavItem("电视剧", "tv", Symbol.List));
+        _navigationView.MenuItems.Add(NavItem("动漫", "anime", Symbol.AllApps));
+        _navigationView.MenuItems.Add(NavItem("综艺", "shows", Symbol.Play));
+        _navigationView.MenuItems.Add(NavItem("直播", "live", Symbol.Camera));
         _navigationView.MenuItems.Add(new NavigationViewItemSeparator());
-        _navigationView.MenuItems.Add(NavItem("登录", "login"));
-        _navigationView.MenuItems.Add(NavItem("收藏", "favorites"));
-        _navigationView.MenuItems.Add(NavItem("历史", "history"));
-        _navigationView.MenuItems.Add(NavItem("设置", "settings"));
+        _navigationView.MenuItems.Add(NavItem("登录", "login", Symbol.Contact));
+        _navigationView.MenuItems.Add(NavItem("收藏", "favorites", Symbol.Favorite));
+        _navigationView.MenuItems.Add(NavItem("历史", "history", Symbol.Calendar));
+        _navigationView.MenuItems.Add(NavItem("设置", "settings", Symbol.Setting));
         _navigationView.ItemInvoked += OnNavigationItemInvoked;
         _navigationView.Content = _contentHost;
+
+        UpdatePaneFooter();
+
         return _navigationView;
     }
 
-    private static NavigationViewItem NavItem(string title, string tag, bool isSelected = false)
+    private static NavigationViewItem NavItem(string title, string tag, Symbol symbol, bool isSelected = false)
     {
         return new NavigationViewItem
         {
             Content = title,
             Tag = tag,
+            Icon = new SymbolIcon(symbol),
             IsSelected = isSelected,
         };
+    }
+
+    private void UpdatePaneFooter()
+    {
+        var footerStack = new Grid
+        {
+            Margin = new Thickness(16, 12, 16, 16),
+            Padding = new Thickness(12),
+            Background = new SolidColorBrush(Color.FromArgb(255, 22, 29, 22)),
+            CornerRadius = new CornerRadius(12),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(12, 255, 255, 255)),
+            BorderThickness = new Thickness(1),
+        };
+        footerStack.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        footerStack.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var avatarBorder = new Border
+        {
+            Width = 40,
+            Height = 40,
+            CornerRadius = new CornerRadius(20),
+            BorderThickness = new Thickness(2),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(51, 18, 200, 102)),
+            Margin = new Thickness(0, 0, 12, 0),
+            Child = new Image
+            {
+                Source = new BitmapImage(new Uri("https://lh3.googleusercontent.com/aida-public/AB6AXuDNT3PMzptySa7Ze6np960PEOLTdNGudHp-62fqmyMfOSd15QXINEQ8ziHEH5kYKiR1R37cMif7GWCiGi3uprZSdF9V986nbKqqVuTiuyQnfnyXlY241YSW74rXOMdNGGI3BGh4asNr0fVHJ-hpNwhKX3Yv4DTo0G41JK1CMZQm5Fpo72tV64-tkvHCwGVfgQxClVv6MnmdYT2Kf6oDlDcAiVlso4zXJ-0T71CARqfmlBBkmtrYxj0clL1CKnt9e4Yt6qsZsbPnhrw")),
+                Stretch = Stretch.UniformToFill,
+            }
+        };
+        Grid.SetColumn(avatarBorder, 0);
+        footerStack.Children.Add(avatarBorder);
+
+        var infoStack = new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var username = Login.Session?.Username ?? "未登录";
+        var userText = new TextBlock
+        {
+            Text = username,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromArgb(255, 220, 229, 217)),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        infoStack.Children.Add(userText);
+
+        var badgeText = new TextBlock
+        {
+            Text = Login.Session != null ? "VIP MEMBER" : "GUEST",
+            FontSize = 10,
+            FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+            Foreground = new SolidColorBrush(Color.FromArgb(255, 18, 200, 102)),
+            CharacterSpacing = 150,
+        };
+        infoStack.Children.Add(badgeText);
+        Grid.SetColumn(infoStack, 1);
+        footerStack.Children.Add(infoStack);
+
+        _navigationView!.PaneFooter = footerStack;
     }
 
     private async void OnFirstActivated(object sender, WindowActivatedEventArgs args)
     {
         Activated -= OnFirstActivated;
         await Login.LoadAsync();
+        UpdatePaneFooter();
         await ShowPageAsync("home");
     }
 
@@ -145,11 +238,6 @@ public sealed partial class MainWindow : Window
 
     private async Task ShowPageAsync(string page)
     {
-        if (_navigationView is not null)
-        {
-            _navigationView.Header = PageTitle(page);
-        }
-
         var provider = Login.CreateProvider();
         switch (page)
         {
@@ -226,6 +314,7 @@ public sealed partial class MainWindow : Window
 
     private async Task OnLoginSessionChangedAsync()
     {
+        UpdatePaneFooter();
         await ShowPageAsync("home");
     }
 
