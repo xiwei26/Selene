@@ -9,12 +9,19 @@ struct FavoriteItem: Identifiable, Codable, Hashable {
     var cover: String
     var totalEpisodes: Int
     var saveTime: Int64
+    var searchTitle: String
+    var origin: String
+    var type: String?
+    var releaseDate: String?
+    var remarks: String?
 
     enum CodingKeys: String, CodingKey {
         case id, source, title, year, cover
         case sourceName = "source_name"
         case totalEpisodes = "total_episodes"
         case saveTime = "save_time"
+        case searchTitle = "search_title"
+        case origin, type, releaseDate, remarks
     }
 
     static func fromJson(key: String, data: [String: Any]) -> FavoriteItem {
@@ -27,19 +34,30 @@ struct FavoriteItem: Identifiable, Codable, Hashable {
             year: data["year"] as? String ?? "",
             cover: data["cover"] as? String ?? data["poster"] as? String ?? "",
             totalEpisodes: intValue(data["total_episodes"] ?? data["totalEpisodes"]) ?? 0,
-            saveTime: int64Value(data["save_time"] ?? data["saveTime"]) ?? Int64(Date().timeIntervalSince1970 * 1000)
+            saveTime: int64Value(data["save_time"] ?? data["saveTime"]) ?? Int64(Date().timeIntervalSince1970 * 1000),
+            searchTitle: data["search_title"] as? String ?? data["searchTitle"] as? String ?? data["title"] as? String ?? "",
+            origin: data["origin"] as? String ?? "vod",
+            type: data["type"] as? String,
+            releaseDate: data["releaseDate"] as? String ?? data["release_date"] as? String,
+            remarks: data["remarks"] as? String
         )
     }
 
     func toJson() -> [String: Any] {
-        [
+        var json: [String: Any] = [
             "title": title,
             "source_name": sourceName,
             "year": year,
             "cover": cover,
             "total_episodes": totalEpisodes,
-            "save_time": saveTime
+            "save_time": saveTime,
+            "search_title": searchTitle,
+            "origin": origin
         ]
+        json["type"] = type
+        json["releaseDate"] = releaseDate
+        json["remarks"] = remarks
+        return json
     }
 }
 

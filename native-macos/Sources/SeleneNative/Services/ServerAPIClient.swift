@@ -131,10 +131,17 @@ final class ServerAPIClient: ContentProvider, Sendable {
 
     func addFavorite(source: String, id: String, data: [String: Any]) async throws {
         let key = "\(source)+\(id)"
+        var favorite = data
+        if favorite["search_title"] == nil {
+            favorite["search_title"] = favorite["title"] as? String ?? ""
+        }
+        if favorite["origin"] == nil {
+            favorite["origin"] = "vod"
+        }
         _ = try await performDataRequest(
             path: "/api/favorites",
             method: "POST",
-            body: ["key": key, "favorite": data]
+            body: ["key": key, "favorite": favorite]
         )
     }
 
@@ -231,6 +238,9 @@ final class ServerAPIClient: ContentProvider, Sendable {
         if let sources = try? JSONDecoder().decode([LiveSource].self, from: data) {
             return sources
         }
+        if let wrapped = try? JSONDecoder().decode(DataResponse<[LiveSource]>.self, from: data) {
+            return wrapped.data
+        }
         let wrapped = try JSONDecoder().decode(LiveSourcesResponse.self, from: data)
         return wrapped.sources
     }
@@ -242,6 +252,9 @@ final class ServerAPIClient: ContentProvider, Sendable {
         )
         if let channels = try? JSONDecoder().decode([LiveChannel].self, from: data) {
             return channels
+        }
+        if let wrapped = try? JSONDecoder().decode(DataResponse<[LiveChannel]>.self, from: data) {
+            return wrapped.data
         }
         let wrapped = try JSONDecoder().decode(LiveChannelsResponse.self, from: data)
         return wrapped.channels
@@ -256,6 +269,9 @@ final class ServerAPIClient: ContentProvider, Sendable {
             ]
         )
         guard !data.isEmpty else { return nil }
+        if let wrapped = try? JSONDecoder().decode(DataResponse<EpgData>.self, from: data) {
+            return wrapped.data
+        }
         return try JSONDecoder().decode(EpgData.self, from: data)
     }
 
@@ -340,4 +356,8 @@ private struct LiveSourcesResponse: Decodable {
 
 private struct LiveChannelsResponse: Decodable {
     let channels: [LiveChannel]
+}
+
+private struct DataResponse<T: Decodable>: Decodable {
+    let data: T
 }

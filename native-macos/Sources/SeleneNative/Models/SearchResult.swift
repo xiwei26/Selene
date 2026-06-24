@@ -13,6 +13,11 @@ struct SearchResult: Codable, Identifiable, Hashable, Equatable {
     let description: String?
     let typeName: String?
     let doubanID: Int?
+    let remarks: String?
+    let resolution: String?
+    let resolutionLevel: Int?
+    let qualityTag: String?
+    let dramaName: String?
 
     enum CodingKeys: String, CodingKey {
         case id, title, poster, episodes, source, year
@@ -22,6 +27,10 @@ struct SearchResult: Codable, Identifiable, Hashable, Equatable {
         case description = "desc"
         case typeName = "type_name"
         case doubanID = "douban_id"
+        case remarks, resolution
+        case resolutionLevel = "resolution_level"
+        case qualityTag = "quality_tag"
+        case dramaName = "drama_name"
     }
 
     init(
@@ -36,7 +45,12 @@ struct SearchResult: Codable, Identifiable, Hashable, Equatable {
         year: String,
         description: String? = nil,
         typeName: String? = nil,
-        doubanID: Int? = nil
+        doubanID: Int? = nil,
+        remarks: String? = nil,
+        resolution: String? = nil,
+        resolutionLevel: Int? = nil,
+        qualityTag: String? = nil,
+        dramaName: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -50,6 +64,11 @@ struct SearchResult: Codable, Identifiable, Hashable, Equatable {
         self.description = description
         self.typeName = typeName
         self.doubanID = doubanID
+        self.remarks = remarks
+        self.resolution = resolution
+        self.resolutionLevel = resolutionLevel
+        self.qualityTag = qualityTag
+        self.dramaName = dramaName
     }
 
     init(from decoder: Decoder) throws {
@@ -66,6 +85,11 @@ struct SearchResult: Codable, Identifiable, Hashable, Equatable {
         description = try container.decodeIfPresent(String.self, forKey: .description)
         typeName = try container.decodeIfPresent(String.self, forKey: .typeName)
         doubanID = try container.decodeIfPresent(Int.self, forKey: .doubanID)
+        remarks = try container.decodeIfPresent(String.self, forKey: .remarks)
+        resolution = try container.decodeIfPresent(String.self, forKey: .resolution)
+        resolutionLevel = try container.decodeIfPresent(Int.self, forKey: .resolutionLevel)
+        qualityTag = try container.decodeIfPresent(String.self, forKey: .qualityTag)
+        dramaName = try container.decodeIfPresent(String.self, forKey: .dramaName)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -82,6 +106,11 @@ struct SearchResult: Codable, Identifiable, Hashable, Equatable {
         try container.encodeIfPresent(description, forKey: .description)
         try container.encodeIfPresent(typeName, forKey: .typeName)
         try container.encodeIfPresent(doubanID, forKey: .doubanID)
+        try container.encodeIfPresent(remarks, forKey: .remarks)
+        try container.encodeIfPresent(resolution, forKey: .resolution)
+        try container.encodeIfPresent(resolutionLevel, forKey: .resolutionLevel)
+        try container.encodeIfPresent(qualityTag, forKey: .qualityTag)
+        try container.encodeIfPresent(dramaName, forKey: .dramaName)
     }
 
     func episodeTitle(for index: Int) -> String {

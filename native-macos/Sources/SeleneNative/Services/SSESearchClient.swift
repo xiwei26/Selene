@@ -116,7 +116,11 @@ final class SSESearchClient {
             return nil
         }
 
-        return (eventType, payload)
+        if eventType == "message", let payloadType = payload["type"] as? String {
+            eventType = payloadType
+        }
+
+        return (Self.normalizedEventType(eventType), payload)
     }
 
     func handle(
@@ -125,7 +129,7 @@ final class SSESearchClient {
     ) -> SearchProgress {
         var next = currentProgress
 
-        switch event.type {
+        switch Self.normalizedEventType(event.type) {
         case "start":
             next.totalSources = intValue(event.data["totalSources"] ?? event.data["total_sources"]) ?? 0
             next.completedSources = 0
@@ -163,5 +167,16 @@ final class SSESearchClient {
         }
 
         return next
+    }
+
+    private static func normalizedEventType(_ eventType: String) -> String {
+        switch eventType {
+        case "source_result":
+            return "sourceResult"
+        case "source_error":
+            return "sourceError"
+        default:
+            return eventType
+        }
     }
 }
