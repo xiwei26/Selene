@@ -73,6 +73,30 @@ final class FeatureParityP2Tests: XCTestCase {
         XCTAssertEqual(item.images.bestImageUrl, "common.jpg")
     }
 
+    func testBangumiItemToleratesNullNestedFieldsFromAPI() throws {
+        let data = """
+        {
+          "id": 2,
+          "name": "Null Fields",
+          "images": {"large": null, "common": "common.jpg", "medium": null},
+          "rating": {"total": null, "count": null, "score": null},
+          "collection": {"doing": null, "wish": 3}
+        }
+        """.data(using: .utf8)!
+
+        let item = try JSONDecoder().decode(BangumiItem.self, from: data)
+
+        XCTAssertEqual(item.images.bestImageUrl, "common.jpg")
+        XCTAssertEqual(item.rating.total, 0)
+        XCTAssertEqual(item.collection.wish, 3)
+        XCTAssertEqual(item.collection.doing, 0)
+    }
+
+    func testAPIErrorDescriptionWorksThroughErrorProtocol() {
+        let error: Error = APIError.parseError
+        XCTAssertEqual(error.localizedDescription, "数据解析失败")
+    }
+
     func testCacheServiceExpiresEntries() throws {
         let cache = CacheService(namespace: "FeatureParityP2Tests-\(UUID().uuidString)")
         try cache.save(key: "fresh", data: ["value"], maxAge: 60)
