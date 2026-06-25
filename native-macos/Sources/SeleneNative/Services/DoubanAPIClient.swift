@@ -4,7 +4,7 @@ protocol DoubanProviding: Sendable {
     func getHotMovies() async throws -> [DoubanMovie]
     func getHotTVShows() async throws -> [DoubanMovie]
     func getHotShows() async throws -> [DoubanMovie]
-    func getRecommendations(kind: String, category: String?, region: String?) async throws -> [DoubanMovie]
+    func getRecommendations(kind: String, category: String?, region: String?, type: String?) async throws -> [DoubanMovie]
     func getDetails(doubanId: String) async throws -> DoubanMovieDetails
 }
 
@@ -24,19 +24,19 @@ final class DoubanAPIClient: DoubanProviding, Sendable {
     }
 
     func getHotMovies() async throws -> [DoubanMovie] {
-        try await getRecommendations(kind: "movie", category: "热门", region: nil)
+        try await getRecommendations(kind: "movie", category: "热门", region: nil, type: nil)
     }
 
     func getHotTVShows() async throws -> [DoubanMovie] {
-        try await getRecommendations(kind: "tv", category: "热门", region: nil)
+        try await getRecommendations(kind: "tv", category: "最近热门", region: nil, type: "tv")
     }
 
     func getHotShows() async throws -> [DoubanMovie] {
-        try await getRecommendations(kind: "show", category: "热门", region: nil)
+        try await getRecommendations(kind: "tv", category: "show", region: nil, type: "show")
     }
 
-    func getRecommendations(kind: String, category: String?, region: String?) async throws -> [DoubanMovie] {
-        let key = "douban-list-\(kind)-\(category ?? "all")-\(region ?? "all")"
+    func getRecommendations(kind: String, category: String?, region: String?, type: String? = nil) async throws -> [DoubanMovie] {
+        let key = "douban-list-\(kind)-\(category ?? "all")-\(region ?? "all")-\(type ?? "all")"
         if let cached: [DoubanMovie] = cache.load(key: key, maxAge: 6 * 60 * 60) {
             return cached
         }
@@ -48,6 +48,7 @@ final class DoubanAPIClient: DoubanProviding, Sendable {
         ]
         if let category { queryItems.append(URLQueryItem(name: "category", value: category)) }
         if let region { queryItems.append(URLQueryItem(name: "region", value: region)) }
+        if let type { queryItems.append(URLQueryItem(name: "type", value: type)) }
         components?.queryItems = queryItems
 
         let response: DoubanResponse = try await getJSON(url: components?.url)

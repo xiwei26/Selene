@@ -35,9 +35,12 @@ struct PlayerView: View {
                     PlayerSourcesView(playerStore: playerStore)
                     PlayerEpisodesView(playerStore: playerStore)
                 }
-                .padding(.horizontal)
+                .appSurface()
+                .padding(.horizontal, AppTheme.pagePadding)
+                .padding(.bottom, AppTheme.pagePadding)
             }
         }
+        .appPageBackground()
     }
 
     private func playbackErrorView(_ error: String) -> some View {
@@ -61,6 +64,7 @@ struct PlayerView: View {
                 }
             }
         }
+        .appSurface()
         .padding()
     }
 }

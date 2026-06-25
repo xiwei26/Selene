@@ -9,9 +9,14 @@ struct LiveScreenView: View {
     private let columns = [GridItem(.adaptive(minimum: 180, maximum: 260), spacing: 12)]
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
+            AppPageHeader(
+                title: "直播",
+                subtitle: "按源和分组浏览直播频道。",
+                systemImage: "dot.radiowaves.left.and.right"
+            )
+
             toolbar
-            Divider()
 
             if liveStore.isLoading && liveStore.channels.isEmpty {
                 ProgressView("加载直播频道...")
@@ -38,6 +43,8 @@ struct LiveScreenView: View {
                 }
             }
         }
+        .padding(AppTheme.pagePadding)
+        .appPageBackground()
         .task {
             await liveStore.loadSources(provider: provider)
             if let source = liveStore.currentSource {
@@ -81,7 +88,7 @@ struct LiveScreenView: View {
 
             Spacer()
         }
-        .padding()
+        .appSurface()
     }
 
     private var sourceSelection: Binding<String?> {
@@ -140,7 +147,11 @@ private struct LiveChannelCard: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: 110, alignment: .leading)
-        .background(Color.secondary.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .background(AppTheme.elevatedSurface)
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.radius)
+                .stroke(AppTheme.border, lineWidth: 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radius))
     }
 }

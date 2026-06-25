@@ -12,10 +12,10 @@ struct SearchResultsView: View {
         HSplitView {
             VStack(spacing: 0) {
                 searchHeader
-                Divider()
                 resultsList
             }
             .frame(minWidth: 360)
+            .background(AppTheme.pageBackground)
 
             VStack(spacing: 0) {
                 if let result = searchStore.selectedResult {
@@ -41,9 +41,7 @@ struct SearchResultsView: View {
                     )
                     .frame(minWidth: 360)
                 } else {
-                    ContentUnavailableView {
-                        Label("选择一个结果查看详情", systemImage: "doc.text.magnifyingglass")
-                    }
+                    ContentUnavailableView("选择一个结果查看详情", systemImage: "doc.text.magnifyingglass")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
 
@@ -53,7 +51,9 @@ struct SearchResultsView: View {
                         .frame(minHeight: 300)
                 }
             }
+            .background(AppTheme.pageBackground)
         }
+        .appPageBackground()
         .task {
             await searchStore.loadResources()
             await searchStore.loadHistory()
@@ -66,6 +66,12 @@ struct SearchResultsView: View {
 
     private var searchHeader: some View {
         VStack(alignment: .leading, spacing: 10) {
+            AppPageHeader(
+                title: "搜索",
+                subtitle: "聚合服务器资源，筛选来源、年份和关键词。",
+                systemImage: "magnifyingglass"
+            )
+
             ZStack(alignment: .topLeading) {
                 HStack {
                     TextField("搜索电影、剧集、综艺...", text: $searchStore.query)
@@ -97,6 +103,7 @@ struct SearchResultsView: View {
 
             if searchStore.isLoading {
                 ProgressView(value: searchStore.sseProgress.progressPercentage)
+                    .tint(AppTheme.accent)
             }
 
             filterBar
@@ -105,7 +112,8 @@ struct SearchResultsView: View {
                 .font(.caption)
             historyBar
         }
-        .padding()
+        .padding(AppTheme.pagePadding)
+        .background(AppTheme.pageBackground)
     }
 
     private var filterBar: some View {
@@ -144,6 +152,13 @@ struct SearchResultsView: View {
             .help("清除筛选")
         }
         .font(.caption)
+        .padding(10)
+        .background(AppTheme.elevatedSurface)
+        .overlay {
+            RoundedRectangle(cornerRadius: AppTheme.radius)
+                .stroke(AppTheme.border, lineWidth: 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radius))
     }
 
     private var historyBar: some View {
@@ -161,6 +176,7 @@ struct SearchResultsView: View {
                 }
             }
         }
+        .scrollIndicators(.hidden)
     }
 
     private var resultsList: some View {
@@ -185,28 +201,54 @@ struct SearchResultsView: View {
             } else if searchStore.results.isEmpty {
                 ContentUnavailableView("开始搜索", systemImage: "film", description: Text("在服务器上搜索视频内容"))
             } else if searchStore.isAggregating {
-                List(searchStore.filteredAggregatedResults) { aggregate in
-                    VideoCardView(
-                        title: aggregate.title,
-                        poster: aggregate.cover,
-                        sourceName: aggregate.sourceNames.joined(separator: " / "),
-                        year: aggregate.year,
-                        subtitle: "\(aggregate.sourceNames.count) 个来源"
-                    )
-                    .contentShape(Rectangle())
-                    .onTapGesture { searchStore.selectAggregate(aggregate) }
+                ScrollView {
+                    LazyVStack(spacing: 10) {
+                        ForEach(searchStore.filteredAggregatedResults) { aggregate in
+                            Button {
+                                searchStore.selectAggregate(aggregate)
+                            } label: {
+                                VideoCardView(
+                                    title: aggregate.title,
+                                    poster: aggregate.cover,
+                                    sourceName: aggregate.sourceNames.joined(separator: " / "),
+                                    year: aggregate.year,
+                                    subtitle: "\(aggregate.sourceNames.count) 个来源"
+                                )
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.pagePadding)
+                    .padding(.bottom, AppTheme.pagePadding)
                 }
             } else {
-                List(searchStore.filteredResults, selection: $searchStore.selectedResult) { result in
-                    VideoCardView(
-                        title: result.title,
-                        poster: result.poster,
-                        sourceName: result.sourceName.isEmpty ? result.source : result.sourceName,
-                        year: result.year,
-                        subtitle: result.episodes.isEmpty ? nil : "共\(result.episodes.count)集"
-                    )
-                    .contentShape(Rectangle())
-                    .onTapGesture { searchStore.selectResult(result) }
+                ScrollView {
+                    LazyVStack(spacing: 10) {
+                        ForEach(searchStore.filteredResults) { result in
+                            Button {
+                                searchStore.selectResult(result)
+                            } label: {
+                                VideoCardView(
+                                    title: result.title,
+                                    poster: result.poster,
+                                    sourceName: result.sourceName.isEmpty ? result.source : result.sourceName,
+                                    year: result.year,
+                                    subtitle: result.episodes.isEmpty ? nil : "共\(result.episodes.count)集"
+                                )
+                                .contentShape(Rectangle())
+                                .overlay {
+                                    if searchStore.selectedResult?.id == result.id && searchStore.selectedResult?.source == result.source {
+                                        RoundedRectangle(cornerRadius: AppTheme.radius)
+                                            .stroke(AppTheme.accent, lineWidth: 2)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.pagePadding)
+                    .padding(.bottom, AppTheme.pagePadding)
                 }
             }
         }

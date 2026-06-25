@@ -28,8 +28,8 @@ struct PlayerEpisodesView: View {
                                 .font(.caption)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
-                                .background(index == playerStore.currentEpisodeIndex ? Color.accentColor.opacity(0.22) : Color.secondary.opacity(0.12))
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .background(index == playerStore.currentEpisodeIndex ? AppTheme.softAccent : AppTheme.surface)
+                                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radius))
                         }
                         .buttonStyle(.plain)
                     }

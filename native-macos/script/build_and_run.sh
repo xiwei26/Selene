@@ -41,6 +41,8 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << 'PLIST'
     <key>CFBundleDisplayName</key>
     <string>Selene</string>
     <key>CFBundleIconFile</key>
+    <string>AppIcon.icns</string>
+    <key>CFBundleIconName</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
@@ -74,6 +76,15 @@ if [[ -f "$ICON_SRC" ]]; then
     iconutil -c icns "$ICONSET" -o "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
     rm -rf "$ICONSET"
     echo "App icon created from: $ICON_SRC"
+fi
+
+if [[ -f "$APP_BUNDLE/Contents/Resources/AppIcon.icns" ]]; then
+    touch "$APP_BUNDLE"
+fi
+
+if command -v codesign >/dev/null 2>&1; then
+    codesign --force --deep --sign - "$APP_BUNDLE" >/dev/null
+    echo "App bundle ad-hoc signed"
 fi
 
 echo "App bundle created at: $APP_BUNDLE"

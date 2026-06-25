@@ -15,15 +15,23 @@ struct HomeView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 22) {
+            LazyVStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
+                AppPageHeader(
+                    title: "今日片库",
+                    subtitle: "继续观看、热门内容和每日番组集中在这里。",
+                    systemImage: "play.rectangle.on.rectangle"
+                )
+
                 if isLoading {
                     ProgressView("加载首页内容...")
+                        .appSurface()
                 }
 
                 if let errorMessage {
                     Text(errorMessage)
                         .font(.caption)
                         .foregroundStyle(.red)
+                        .appSurface()
                 }
 
                 continueWatchingSection
@@ -32,8 +40,9 @@ struct HomeView: View {
                 bangumiSection
                 doubanSection("热门综艺", movies: hotShows)
             }
-            .padding()
+            .padding(AppTheme.pagePadding)
         }
+        .appPageBackground()
         .task {
             await load()
         }
@@ -43,10 +52,9 @@ struct HomeView: View {
     }
 
     private var continueWatchingSection: some View {
-        contentSection("继续观看") {
+        contentSection("继续观看", subtitle: "从上次中断的位置继续", count: historyStore.playRecords.count) {
             if historyStore.playRecords.isEmpty {
-                Text("暂无播放记录")
-                    .foregroundStyle(.secondary)
+                emptyInline("暂无播放记录", systemImage: "clock")
             } else {
                 horizontalCards {
                     ForEach(historyStore.playRecords.prefix(10)) { record in
@@ -61,7 +69,7 @@ struct HomeView: View {
                                 subtitle: "第\(record.episodeNumber)集",
                                 progress: record.progressPercentage
                             )
-                            .frame(width: 260)
+                            .frame(width: 280)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -72,10 +80,9 @@ struct HomeView: View {
     }
 
     private var bangumiSection: some View {
-        contentSection("今日番组") {
+        contentSection("今日番组", subtitle: "Bangumi 日历", count: bangumiItems.count) {
             if bangumiItems.isEmpty {
-                Text("暂无番组数据")
-                    .foregroundStyle(.secondary)
+                emptyInline("暂无番组数据", systemImage: "calendar")
             } else {
                 horizontalCards {
                     ForEach(bangumiItems.prefix(12)) { item in
@@ -86,7 +93,7 @@ struct HomeView: View {
                             year: item.airDate,
                             subtitle: item.rating.score > 0 ? "评分 \(String(format: "%.1f", item.rating.score))" : nil
                         )
-                        .frame(width: 260)
+                        .frame(width: 280)
                     }
                 }
             }
@@ -94,10 +101,9 @@ struct HomeView: View {
     }
 
     private func doubanSection(_ title: String, movies: [DoubanMovie]) -> some View {
-        contentSection(title) {
+        contentSection(title, subtitle: "来自 Douban", count: movies.count) {
             if movies.isEmpty {
-                Text("暂无内容")
-                    .foregroundStyle(.secondary)
+                emptyInline("暂无内容", systemImage: "rectangle.stack")
             } else {
                 horizontalCards {
                     ForEach(movies.prefix(12)) { movie in
@@ -108,18 +114,16 @@ struct HomeView: View {
                             year: movie.year,
                             subtitle: movie.rate.map { "评分 \($0)" }
                         )
-                        .frame(width: 260)
+                        .frame(width: 280)
                     }
                 }
             }
         }
     }
 
-    private func contentSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.title3)
-                .bold()
+    private func contentSection<Content: View>(_ title: String, subtitle: String? = nil, count: Int? = nil, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            AppSectionHeader(title: title, subtitle: subtitle, count: count)
             content()
         }
     }
@@ -129,7 +133,20 @@ struct HomeView: View {
             LazyHStack(spacing: 14) {
                 content()
             }
+            .padding(.vertical, 1)
         }
+        .scrollIndicators(.hidden)
+    }
+
+    private func emptyInline(_ text: String, systemImage: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+            Text(text)
+        }
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+        .appSurface()
     }
 
     private func load() async {
