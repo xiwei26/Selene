@@ -342,10 +342,11 @@ public sealed partial class MainWindow : Window
         await _playerPage.OpenAsync(detail, episodeTitle, episodeUrl, episodeNumber);
     }
 
-    private void OnPlayerCloseRequested(object? sender, EventArgs e)
+    private async void OnPlayerCloseRequested(object? sender, EventArgs e)
     {
+        await _playerPage.PersistCurrentRecordAsync();
         _playerViewModel.Stop();
-        ShowPage("home");
+        await ShowPageAsync("home");
     }
 
     private async Task OnPlayerSaveRecordAsync(PlayRecord record)

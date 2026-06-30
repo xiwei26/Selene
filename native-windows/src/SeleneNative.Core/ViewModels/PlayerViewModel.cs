@@ -129,6 +129,20 @@ public sealed partial class PlayerViewModel : ObservableObject, IDisposable
 
     public void Pause() => _player.Pause();
 
+    public void TogglePlayPause()
+    {
+        if (_player.State == MediaPlaybackState.Playing)
+        {
+            Pause();
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(CurrentEpisodeUrl))
+        {
+            Play();
+        }
+    }
+
     public void SeekTo(double seconds)
     {
         RefreshTotalTime();

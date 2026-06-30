@@ -87,6 +87,33 @@ public sealed class PlayerViewModelTests
     }
 
     [Fact]
+    public void TogglePlayPause_ShouldPause_WhenCurrentlyPlaying()
+    {
+        var player = new FakeMediaPlayer();
+        var vm = new PlayerViewModel(() => player);
+        vm.ReplaceItem("https://example.com/video.m3u8", NewResult("Test", "src1"), 0);
+        vm.Play();
+
+        vm.TogglePlayPause();
+
+        Assert.Equal(MediaPlaybackState.Paused, player.State);
+    }
+
+    [Fact]
+    public void TogglePlayPause_ShouldPlay_WhenCurrentlyPaused()
+    {
+        var player = new FakeMediaPlayer();
+        var vm = new PlayerViewModel(() => player);
+        vm.ReplaceItem("https://example.com/video.m3u8", NewResult("Test", "src1"), 0);
+        vm.Play();
+        vm.Pause();
+
+        vm.TogglePlayPause();
+
+        Assert.Equal(MediaPlaybackState.Playing, player.State);
+    }
+
+    [Fact]
     public void MakePlayRecord_ShouldReturnNull_WhenNoResult()
     {
         var vm = new PlayerViewModel(() => new FakeMediaPlayer());

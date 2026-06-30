@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using SeleneNative.Core.Models;
+using SeleneNative.Core.Services;
 using SeleneNative.Core.ViewModels;
 
 namespace SeleneNative.Views;
@@ -24,6 +25,7 @@ public sealed partial class PlayerPage : UserControl
         Unloaded += OnUnloaded;
 
         BackButton.Click += OnBackButtonClick;
+        TogglePlayPauseButton.Click += OnTogglePlayPauseButtonClick;
         RetryButton.Click += OnRetryButtonClick;
         ToggleOrderButton.Click += OnToggleOrderButtonClick;
         SeekSlider.ValueChanged += OnSeekSliderValueChanged;
@@ -71,10 +73,10 @@ public sealed partial class PlayerPage : UserControl
         {
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
         }
-        _ = PersistAsync();
+        _ = PersistCurrentRecordAsync();
     }
 
-    private async Task PersistAsync()
+    public async Task PersistCurrentRecordAsync()
     {
         if (_viewModel is null || SaveRecordRequested is null) return;
         var record = _viewModel.MakePlayRecord();
@@ -92,6 +94,12 @@ public sealed partial class PlayerPage : UserControl
     private void OnRetryButtonClick(object sender, RoutedEventArgs e)
     {
         _viewModel?.Retry();
+    }
+
+    private void OnTogglePlayPauseButtonClick(object sender, RoutedEventArgs e)
+    {
+        _viewModel?.TogglePlayPause();
+        SyncState();
     }
 
     private void OnToggleOrderButtonClick(object sender, RoutedEventArgs e)
@@ -177,6 +185,7 @@ public sealed partial class PlayerPage : UserControl
         }
 
         TotalTimeText.Text = canSeek ? Format(total) : "--:--";
+        TogglePlayPauseButton.Content = _viewModel.Player.State == MediaPlaybackState.Playing ? "暂停" : "继续";
         ErrorBar.IsOpen = !string.IsNullOrWhiteSpace(_viewModel.PlaybackError);
         ErrorBar.Message = _viewModel.PlaybackError ?? string.Empty;
     }
