@@ -442,8 +442,8 @@ internal static class UiHelpers
 
     public static UIElement CreatePlayRecordCard(PlayRecord record)
     {
-        var card = new StackPanel { Width = 260, Spacing = 8 };
-        var imageHost = CreateImageHost(record.Cover, 260, 146);
+        var card = new StackPanel { Width = 180, Spacing = 8 };
+        var imageHost = CreateImageHost(record.Cover, 180, 252);
 
         var overlay = new Border
         {
@@ -506,7 +506,7 @@ internal static class UiHelpers
             grid.Children.Add(new Image
             {
                 Source = new BitmapImage(uri),
-                Stretch = Stretch.UniformToFill,
+                Stretch = Stretch.Uniform,
             });
         }
         else
