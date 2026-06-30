@@ -4,6 +4,7 @@ struct SearchResultsView: View {
     @Bindable var searchStore: SearchStore
     let playerStore: PlayerStore
     let provider: ContentProvider
+    let metadataProvider: MetadataEnhancementProviding?
     let favoritesStore: FavoritesStore
     let historyStore: HistoryStore
     let session: LoginSession?
@@ -32,6 +33,7 @@ struct SearchResultsView: View {
                                 )
                             }
                         },
+                        metadataProvider: metadataProvider,
                         onPlay: { selectedResult, index, url in
                             playerStore.currentSourceResults = sourceResults(for: selectedResult)
                             playerStore.replaceItem(url: url, result: selectedResult, index: index)

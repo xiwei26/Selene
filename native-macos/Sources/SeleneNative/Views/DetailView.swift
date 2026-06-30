@@ -4,17 +4,33 @@ struct DetailView: View {
     let result: SearchResult
     var isFavorited: Bool = false
     var onToggleFavorite: ((SearchResult) -> Void)?
+    var metadataProvider: MetadataEnhancementProviding?
     let onPlay: (SearchResult, Int, URL) -> Void
+    @State private var enhancementStore: DetailEnhancementStore?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 headerSection
                 descriptionSection
+                if let enhancementStore {
+                    DetailEnhancementsView(store: enhancementStore)
+                }
                 episodesSection
                 Spacer()
             }
             .padding()
+        }
+        .task(id: result.id) {
+            guard let metadataProvider else { return }
+            let store = DetailEnhancementStore(provider: metadataProvider)
+            enhancementStore = store
+            await store.load(
+                title: result.title,
+                year: result.year,
+                sourceType: result.typeName ?? result.className,
+                doubanId: result.doubanID
+            )
         }
     }
 

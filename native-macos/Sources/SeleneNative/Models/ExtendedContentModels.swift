@@ -1,0 +1,372 @@
+import Foundation
+
+struct ShortDramaCategory: Identifiable, Codable, Hashable, Sendable {
+    var id: String
+    var name: String
+    var type: String?
+    init(id: String, name: String, type: String? = nil) {
+        self.id = id
+        self.name = name
+        self.type = type
+    }
+}
+
+struct ShortDramaItem: Identifiable, Codable, Hashable, Sendable {
+    var id: String
+    var name: String
+    var cover: String
+    var desc: String?
+    var year: String?
+    var category: String?
+    var episodeCount: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, title, cover, poster, desc, year, category
+        case episodeCount = "episode_count"
+        case totalEpisodes = "total_episodes"
+    }
+
+    init(id: String, name: String, cover: String = "", desc: String? = nil, year: String? = nil, category: String? = nil, episodeCount: Int? = nil) {
+        self.id = id
+        self.name = name
+        self.cover = cover
+        self.desc = desc
+        self.year = year
+        self.category = category
+        self.episodeCount = episodeCount
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeFlexibleString(forKey: .id)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+            ?? container.decodeIfPresent(String.self, forKey: .title)
+            ?? ""
+        cover = try container.decodeIfPresent(String.self, forKey: .cover)
+            ?? container.decodeIfPresent(String.self, forKey: .poster)
+            ?? ""
+        desc = try container.decodeIfPresent(String.self, forKey: .desc)
+        year = try container.decodeIfPresent(String.self, forKey: .year)
+        category = try container.decodeIfPresent(String.self, forKey: .category)
+        episodeCount = container.decodeFlexibleIntIfPresent(forKey: .episodeCount)
+            ?? container.decodeFlexibleIntIfPresent(forKey: .totalEpisodes)
+    }
+}
+
+struct ShortDramaListResult: Codable, Hashable, Sendable {
+    var items: [ShortDramaItem]
+    var total: Int
+    var page: Int?
+    var pageSize: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case items, list, data, total, page
+        case pageSize = "page_size"
+    }
+
+    init(items: [ShortDramaItem], total: Int = 0, page: Int? = nil, pageSize: Int? = nil) {
+        self.items = items
+        self.total = total
+        self.page = page
+        self.pageSize = pageSize
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let data = try? container.decode(ShortDramaListResult.self, forKey: .data) {
+            self = data
+            return
+        }
+        items = (try? container.decode([ShortDramaItem].self, forKey: .items))
+            ?? (try? container.decode([ShortDramaItem].self, forKey: .list))
+            ?? []
+        total = (try? container.decodeFlexibleInt(forKey: .total)) ?? items.count
+        page = try? container.decodeFlexibleInt(forKey: .page)
+        pageSize = try? container.decodeFlexibleInt(forKey: .pageSize)
+    }
+}
+
+struct ShortDramaDetail: Codable, Hashable, Sendable {
+    var id: String
+    var name: String
+    var cover: String
+    var desc: String?
+    var episodes: [ShortDramaEpisode]
+
+    init(id: String, name: String, cover: String = "", desc: String? = nil, episodes: [ShortDramaEpisode] = []) {
+        self.id = id
+        self.name = name
+        self.cover = cover
+        self.desc = desc
+        self.episodes = episodes
+    }
+}
+
+struct ShortDramaEpisode: Identifiable, Codable, Hashable, Sendable {
+    var id: String { "\(episode)-\(title ?? "")" }
+    var episode: Int
+    var title: String?
+    var url: String?
+}
+
+struct ShortDramaParseResult: Codable, Hashable, Sendable {
+    var parsedUrl: String?
+    var proxyUrl: String?
+    var url: String?
+
+    enum CodingKeys: String, CodingKey {
+        case url
+        case parsedUrl = "parsedUrl"
+        case parsedURL = "parsed_url"
+        case proxyUrl = "proxyUrl"
+        case proxyURL = "proxy_url"
+    }
+
+    init(parsedUrl: String? = nil, proxyUrl: String? = nil, url: String? = nil) {
+        self.parsedUrl = parsedUrl
+        self.proxyUrl = proxyUrl
+        self.url = url
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        parsedUrl = try container.decodeIfPresent(String.self, forKey: .parsedUrl)
+            ?? container.decodeIfPresent(String.self, forKey: .parsedURL)
+        proxyUrl = try container.decodeIfPresent(String.self, forKey: .proxyUrl)
+            ?? container.decodeIfPresent(String.self, forKey: .proxyURL)
+        url = try container.decodeIfPresent(String.self, forKey: .url)
+    }
+}
+
+struct VideoPlatformItem: Identifiable, Codable, Hashable, Sendable {
+    var id: String
+    var title: String
+    var cover: String
+    var author: String?
+    var duration: String?
+    var views: String?
+    var publishedAt: String?
+    var playableUrl: String?
+    var proxyUrl: String?
+    var url: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, cover, thumbnail, author, duration, views, url
+        case publishedAt = "publishedAt"
+        case publishedAtSnake = "published_at"
+        case playableUrl = "playableUrl"
+        case playableURL = "playable_url"
+        case proxyUrl = "proxyUrl"
+        case proxyURL = "proxy_url"
+    }
+
+    init(id: String, title: String, cover: String = "", author: String? = nil, duration: String? = nil, views: String? = nil, publishedAt: String? = nil, playableUrl: String? = nil, proxyUrl: String? = nil, url: String? = nil) {
+        self.id = id
+        self.title = title
+        self.cover = cover
+        self.author = author
+        self.duration = duration
+        self.views = views
+        self.publishedAt = publishedAt
+        self.playableUrl = playableUrl
+        self.proxyUrl = proxyUrl
+        self.url = url
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeFlexibleString(forKey: .id)
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        cover = try container.decodeIfPresent(String.self, forKey: .cover)
+            ?? container.decodeIfPresent(String.self, forKey: .thumbnail)
+            ?? ""
+        author = try container.decodeIfPresent(String.self, forKey: .author)
+        duration = try container.decodeIfPresent(String.self, forKey: .duration)
+        views = try container.decodeIfPresent(String.self, forKey: .views)
+        publishedAt = try container.decodeIfPresent(String.self, forKey: .publishedAt)
+            ?? container.decodeIfPresent(String.self, forKey: .publishedAtSnake)
+        playableUrl = try container.decodeIfPresent(String.self, forKey: .playableUrl)
+            ?? container.decodeIfPresent(String.self, forKey: .playableURL)
+        proxyUrl = try container.decodeIfPresent(String.self, forKey: .proxyUrl)
+            ?? container.decodeIfPresent(String.self, forKey: .proxyURL)
+        url = try container.decodeIfPresent(String.self, forKey: .url)
+    }
+}
+
+struct VideoPlatformPage: Codable, Hashable, Sendable {
+    var items: [VideoPlatformItem]
+    var nextPageToken: String?
+    var total: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case items, list, data, total
+        case nextPageToken = "nextPageToken"
+        case nextPageTokenSnake = "next_page_token"
+    }
+
+    init(items: [VideoPlatformItem], nextPageToken: String? = nil, total: Int? = nil) {
+        self.items = items
+        self.nextPageToken = nextPageToken
+        self.total = total
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let data = try? container.decode(VideoPlatformPage.self, forKey: .data) {
+            self = data
+            return
+        }
+        items = (try? container.decode([VideoPlatformItem].self, forKey: .items))
+            ?? (try? container.decode([VideoPlatformItem].self, forKey: .list))
+            ?? []
+        nextPageToken = try container.decodeIfPresent(String.self, forKey: .nextPageToken)
+            ?? container.decodeIfPresent(String.self, forKey: .nextPageTokenSnake)
+        total = try? container.decodeFlexibleInt(forKey: .total)
+    }
+}
+
+struct YouTubeRegion: Identifiable, Codable, Hashable, Sendable {
+    var code: String
+    var name: String
+    var id: String { code }
+}
+
+struct TmdbBackdropResult: Codable, Hashable, Sendable {
+    var backdropUrl: String?
+    var logoUrl: String?
+    var posterUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case backdropUrl = "backdropUrl"
+        case backdropURL = "backdrop_url"
+        case logoUrl = "logoUrl"
+        case logoURL = "logo_url"
+        case posterUrl = "posterUrl"
+        case posterURL = "poster_url"
+    }
+
+    init(backdropUrl: String? = nil, logoUrl: String? = nil, posterUrl: String? = nil) {
+        self.backdropUrl = backdropUrl
+        self.logoUrl = logoUrl
+        self.posterUrl = posterUrl
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        backdropUrl = try container.decodeIfPresent(String.self, forKey: .backdropUrl)
+            ?? container.decodeIfPresent(String.self, forKey: .backdropURL)
+        logoUrl = try container.decodeIfPresent(String.self, forKey: .logoUrl)
+            ?? container.decodeIfPresent(String.self, forKey: .logoURL)
+        posterUrl = try container.decodeIfPresent(String.self, forKey: .posterUrl)
+            ?? container.decodeIfPresent(String.self, forKey: .posterURL)
+    }
+}
+
+struct TmdbActorResult: Codable, Hashable, Sendable {
+    var name: String?
+    var profileUrl: String?
+    var works: [DoubanMovie]?
+}
+
+struct DoubanComment: Identifiable, Codable, Hashable, Sendable {
+    var id: String
+    var username: String
+    var content: String
+    var rating: String?
+    var createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, username, user, content, rating
+        case createdAt = "createdAt"
+        case createdAtSnake = "created_at"
+    }
+
+    init(id: String = UUID().uuidString, username: String, content: String, rating: String? = nil, createdAt: String? = nil) {
+        self.id = id
+        self.username = username
+        self.content = content
+        self.rating = rating
+        self.createdAt = createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? container.decodeFlexibleString(forKey: .id)) ?? UUID().uuidString
+        username = try container.decodeIfPresent(String.self, forKey: .username)
+            ?? container.decodeIfPresent(String.self, forKey: .user)
+            ?? ""
+        content = try container.decodeIfPresent(String.self, forKey: .content) ?? ""
+        rating = try container.decodeIfPresent(String.self, forKey: .rating)
+        createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
+            ?? container.decodeIfPresent(String.self, forKey: .createdAtSnake)
+    }
+}
+
+struct DoubanQuickInfo: Codable, Hashable, Sendable {
+    var id: String?
+    var title: String?
+    var summary: String?
+    var rating: String?
+    var year: String?
+}
+
+struct DoubanSuggestItem: Identifiable, Codable, Hashable, Sendable {
+    var id: String
+    var title: String
+    var type: String?
+    var year: String?
+}
+
+struct DoubanCelebrityWork: Identifiable, Codable, Hashable, Sendable {
+    var id: String
+    var title: String
+    var poster: String?
+    var year: String?
+}
+
+struct TrailerRefreshResult: Codable, Hashable, Sendable {
+    var trailerUrl: String?
+    var message: String?
+
+    enum CodingKeys: String, CodingKey {
+        case message
+        case trailerUrl = "trailerUrl"
+        case trailerURL = "trailer_url"
+    }
+
+    init(trailerUrl: String? = nil, message: String? = nil) {
+        self.trailerUrl = trailerUrl
+        self.message = message
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        trailerUrl = try container.decodeIfPresent(String.self, forKey: .trailerUrl)
+            ?? container.decodeIfPresent(String.self, forKey: .trailerURL)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+    }
+}
+
+private extension KeyedDecodingContainer {
+    func decodeFlexibleString(forKey key: Key) throws -> String {
+        if let value = try? decode(String.self, forKey: key) { return value }
+        if let value = try? decode(Int.self, forKey: key) { return String(value) }
+        throw DecodingError.valueNotFound(
+            String.self,
+            DecodingError.Context(codingPath: codingPath + [key], debugDescription: "Expected string-compatible value")
+        )
+    }
+
+    func decodeFlexibleInt(forKey key: Key) throws -> Int {
+        if let value = try? decode(Int.self, forKey: key) { return value }
+        if let value = try? decode(String.self, forKey: key), let intValue = Int(value) { return intValue }
+        throw DecodingError.valueNotFound(
+            Int.self,
+            DecodingError.Context(codingPath: codingPath + [key], debugDescription: "Expected int-compatible value")
+        )
+    }
+
+    func decodeFlexibleIntIfPresent(forKey key: Key) -> Int? {
+        try? decodeFlexibleInt(forKey: key)
+    }
+}
