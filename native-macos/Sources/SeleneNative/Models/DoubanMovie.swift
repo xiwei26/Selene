@@ -28,7 +28,7 @@ struct DoubanMovieDetails: Codable, Hashable {
     var recommends: [DoubanRecommendItem]
 
     enum CodingKeys: String, CodingKey {
-        case id, title, poster, rate, summary, genres, directors, screenwriters, actors, duration, countries, languages, recommends
+        case id, title, poster, rate, year, summary, genres, directors, screenwriters, actors, duration, countries, languages, recommends
         case pic, rating, pubdate
         case releaseDate = "release_date"
         case originalTitle = "original_title"
@@ -46,7 +46,8 @@ struct DoubanMovieDetails: Codable, Hashable {
         rate = try container.decodeIfPresent(String.self, forKey: .rate)
             ?? (try? container.decode(DoubanRating.self, forKey: .rating).displayValue)
         let pubdates = (try? container.decode([String].self, forKey: .pubdate)) ?? []
-        year = Self.extractYear(from: pubdates.first ?? "")
+        year = try container.decodeIfPresent(String.self, forKey: .year)
+            ?? Self.extractYear(from: pubdates.first ?? "")
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
         genres = (try? container.decode([String].self, forKey: .genres)) ?? []
         directors = Self.decodePeople(from: container, key: .directors)
@@ -107,7 +108,7 @@ struct DoubanMovie: Identifiable, Codable, Hashable {
     var year: String
 
     enum CodingKeys: String, CodingKey {
-        case id, title, poster, rate, pic, rating
+        case id, title, poster, rate, year, pic, rating
         case cardSubtitle = "card_subtitle"
     }
 
@@ -128,7 +129,8 @@ struct DoubanMovie: Identifiable, Codable, Hashable {
             ?? ""
         rate = try container.decodeIfPresent(String.self, forKey: .rate)
             ?? (try? container.decode(DoubanRating.self, forKey: .rating).displayValue)
-        year = DoubanMovieDetails.extractYear(from: (try? container.decode(String.self, forKey: .cardSubtitle)) ?? "")
+        year = try container.decodeIfPresent(String.self, forKey: .year)
+            ?? DoubanMovieDetails.extractYear(from: (try? container.decode(String.self, forKey: .cardSubtitle)) ?? "")
     }
 
     func encode(to encoder: Encoder) throws {
