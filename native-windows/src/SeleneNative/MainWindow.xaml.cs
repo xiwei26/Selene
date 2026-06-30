@@ -9,6 +9,7 @@ using SeleneNative.Core.Models;
 using SeleneNative.Core.Services;
 using SeleneNative.Core.ViewModels;
 using SeleneNative.Views;
+using VideoPlatformViewPage = SeleneNative.Views.VideoPlatformPage;
 
 namespace SeleneNative;
 
@@ -36,8 +37,8 @@ public sealed partial class MainWindow : Window
     private DetailPage _detailPage = null!;
     private PlayerPage _playerPage = null!;
     private ShortDramaPage _shortDramaPage = null!;
-    private VideoPlatformPage _bilibiliPage = null!;
-    private VideoPlatformPage _youtubePage = null!;
+    private VideoPlatformViewPage _bilibiliPage = null!;
+    private VideoPlatformViewPage _youtubePage = null!;
 
     public HomeViewModel Home { get; }
     public LoginViewModel Login { get; }
@@ -83,8 +84,8 @@ public sealed partial class MainWindow : Window
         _detailPage = new DetailPage();
         _playerPage = new PlayerPage();
         _shortDramaPage = new ShortDramaPage();
-        _bilibiliPage = new VideoPlatformPage();
-        _youtubePage = new VideoPlatformPage();
+        _bilibiliPage = new VideoPlatformViewPage();
+        _youtubePage = new VideoPlatformViewPage();
         _playerPage.Bind(_playerViewModel);
         _playerPage.CloseRequested += OnPlayerCloseRequested;
         _playerPage.SaveRecordRequested += OnPlayerSaveRecordAsync;
