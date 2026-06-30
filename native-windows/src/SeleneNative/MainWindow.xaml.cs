@@ -422,7 +422,10 @@ public sealed partial class MainWindow : Window
     {
         _detailPage.PlayRequested -= OnPlayEpisodeAsync;
         _detailPage.PlayRequested += OnPlayEpisodeAsync;
-        await _detailViewModel.LoadAsync(result, provider, _doubanClient);
+        var metadataClient = Login.Session is not null && !string.IsNullOrWhiteSpace(Login.Session.ServerUrl)
+            ? new MetadataEnhancementClient(Login.Session.ServerUrl, Login.Session.Cookie)
+            : null;
+        await _detailViewModel.LoadAsync(result, provider, _doubanClient, metadataClient);
         _detailPage.Build(_detailViewModel, provider);
         _contentHost!.Content = _detailPage;
     }

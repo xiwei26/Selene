@@ -15,6 +15,15 @@ public sealed partial class DetailViewModel : ObservableObject
     private DoubanMovie? _doubanInfo;
 
     [ObservableProperty]
+    private TmdbBackdropResult? _tmdbBackdrop;
+
+    [ObservableProperty]
+    private DoubanQuickInfo? _doubanQuickInfo;
+
+    [ObservableProperty]
+    private TrailerRefreshResult? _trailerRefresh;
+
+    [ObservableProperty]
     private bool _isLoading;
 
     [ObservableProperty]
@@ -23,6 +32,8 @@ public sealed partial class DetailViewModel : ObservableObject
     public ObservableCollection<SearchResult> Sources { get; } = [];
     public ObservableCollection<string> Episodes { get; } = [];
     public ObservableCollection<string> EpisodeTitles { get; } = [];
+    public ObservableCollection<DoubanComment> DoubanComments { get; } = [];
+    public ObservableCollection<DoubanMovie> DoubanRecommendations { get; } = [];
 
     public event Action<string, int>? PlayRequested;
 
@@ -37,12 +48,18 @@ public sealed partial class DetailViewModel : ObservableObject
         SearchResult seed,
         IContentProvider? provider,
         IDoubanClient? doubanClient,
+        IMetadataEnhancementClient? metadataClient = null,
         CancellationToken cancellationToken = default)
     {
         Result = seed;
         Sources.Clear();
         Episodes.Clear();
         EpisodeTitles.Clear();
+        DoubanComments.Clear();
+        DoubanRecommendations.Clear();
+        TmdbBackdrop = null;
+        DoubanQuickInfo = null;
+        TrailerRefresh = null;
         ErrorMessage = null;
         IsLoading = true;
 
@@ -84,6 +101,11 @@ public sealed partial class DetailViewModel : ObservableObject
                     // Douban failure does not block the detail page
                 }
             }
+
+            if (metadataClient is not null)
+            {
+                await LoadMetadataEnhancementsAsync(seed, metadataClient, cancellationToken).ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {
@@ -92,6 +114,81 @@ public sealed partial class DetailViewModel : ObservableObject
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    private async Task LoadMetadataEnhancementsAsync(
+        SearchResult seed,
+        IMetadataEnhancementClient metadataClient,
+        CancellationToken cancellationToken)
+    {
+        var detail = Result ?? seed;
+
+        try
+        {
+            TmdbBackdrop = await metadataClient.LoadBackdropAsync(
+                detail.Title,
+                originalTitle: null,
+                string.IsNullOrWhiteSpace(detail.Year) ? null : detail.Year,
+                detail.TypeName ?? detail.ClassName ?? detail.Source,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            TmdbBackdrop = null;
+        }
+
+        if (seed.DoubanId is not int doubanId || doubanId <= 0)
+        {
+            return;
+        }
+
+        var id = doubanId.ToString();
+
+        try
+        {
+            DoubanQuickInfo = await metadataClient.LoadDoubanQuickInfoAsync(id, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            DoubanQuickInfo = null;
+        }
+
+        try
+        {
+            foreach (var comment in await metadataClient.LoadDoubanCommentsAsync(id, cancellationToken: cancellationToken)
+                         .ConfigureAwait(false))
+            {
+                DoubanComments.Add(comment);
+            }
+        }
+        catch
+        {
+            DoubanComments.Clear();
+        }
+
+        try
+        {
+            var kind = detail.TypeName ?? detail.ClassName ?? "movie";
+            foreach (var movie in await metadataClient.LoadDoubanRecommendsAsync(kind, cancellationToken: cancellationToken)
+                         .ConfigureAwait(false))
+            {
+                DoubanRecommendations.Add(movie);
+            }
+        }
+        catch
+        {
+            DoubanRecommendations.Clear();
+        }
+
+        try
+        {
+            TrailerRefresh = await metadataClient.RefreshTrailerAsync(id, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            TrailerRefresh = null;
         }
     }
 }

@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.UI;
 using System.Runtime.CompilerServices;
 using SeleneNative.Core.Models;
@@ -112,6 +113,44 @@ public sealed partial class DetailPage : UserControl
             });
         }
 
+        if (!string.IsNullOrWhiteSpace(_vm.TmdbBackdrop?.BackdropUrl) &&
+            Uri.TryCreate(_vm.TmdbBackdrop.BackdropUrl, UriKind.Absolute, out var backdropUri))
+        {
+            ContentStack.Children.Add(new Image
+            {
+                Source = new BitmapImage(backdropUri),
+                Stretch = Stretch.UniformToFill,
+                MaxHeight = 260,
+            });
+        }
+
+        if (_vm.DoubanQuickInfo is not null)
+        {
+            var quickInfoText = string.Join(Environment.NewLine, new[]
+            {
+                _vm.DoubanQuickInfo.Title,
+                _vm.DoubanQuickInfo.Rating is { Length: > 0 } rating ? $"Douban {rating}" : null,
+                _vm.DoubanQuickInfo.Summary
+            }.Where(value => !string.IsNullOrWhiteSpace(value)));
+
+            if (!string.IsNullOrWhiteSpace(quickInfoText))
+            {
+                ContentStack.Children.Add(new TextBlock
+                {
+                    Text = quickInfoText,
+                    TextWrapping = TextWrapping.Wrap,
+                    MaxWidth = 760,
+                });
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(_vm.TrailerRefresh?.TrailerUrl) ||
+            !string.IsNullOrWhiteSpace(_vm.TrailerRefresh?.Url))
+        {
+            var trailerUrl = _vm.TrailerRefresh.TrailerUrl ?? _vm.TrailerRefresh.Url;
+            ContentStack.Children.Add(UiHelpers.InfoBar("Trailer", trailerUrl!, InfoBarSeverity.Informational));
+        }
+
         // Source switcher
         if (_vm.Sources.Count > 1)
         {
@@ -137,28 +176,61 @@ public sealed partial class DetailPage : UserControl
         if (_vm.Episodes.Count == 0)
         {
             ContentStack.Children.Add(UiHelpers.EmptyState("暂无播放地址", "当前详情没有返回分集地址。"));
-            return;
+        }
+        else
+        {
+            var episodeSection = new StackPanel { Spacing = 8 };
+            episodeSection.Children.Add(new TextBlock
+            {
+                Text = "选集",
+                FontSize = 20,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            });
+
+            for (var i = 0; i < _vm.Episodes.Count; i++)
+            {
+                var title = _vm.EpisodeTitles.Count > i && !string.IsNullOrWhiteSpace(_vm.EpisodeTitles[i])
+                    ? _vm.EpisodeTitles[i]
+                    : $"第 {i + 1} 集";
+                var idx = i;
+                var btn = new Button { Content = title, HorizontalAlignment = HorizontalAlignment.Left };
+                btn.Click += (_, _) => _vm.PlayEpisodeCommand.Execute(idx);
+                episodeSection.Children.Add(btn);
+            }
+
+            ContentStack.Children.Add(episodeSection);
         }
 
-        var episodeSection = new StackPanel { Spacing = 8 };
-        episodeSection.Children.Add(new TextBlock
+        if (_vm.DoubanComments.Count > 0)
         {
-            Text = "选集",
-            FontSize = 20,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-        });
-
-        for (var i = 0; i < _vm.Episodes.Count; i++)
-        {
-            var title = _vm.EpisodeTitles.Count > i && !string.IsNullOrWhiteSpace(_vm.EpisodeTitles[i])
-                ? _vm.EpisodeTitles[i]
-                : $"第 {i + 1} 集";
-            var idx = i;
-            var btn = new Button { Content = title, HorizontalAlignment = HorizontalAlignment.Left };
-            btn.Click += (_, _) => _vm.PlayEpisodeCommand.Execute(idx);
-            episodeSection.Children.Add(btn);
+            var comments = new StackPanel { Spacing = 8 };
+            comments.Children.Add(new TextBlock
+            {
+                Text = "Douban Comments",
+                FontSize = 18,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            });
+            foreach (var comment in _vm.DoubanComments.Take(5))
+            {
+                comments.Children.Add(UiHelpers.Row(comment.Username, comment.Content));
+            }
+            ContentStack.Children.Add(comments);
         }
 
-        ContentStack.Children.Add(episodeSection);
+        if (_vm.DoubanRecommendations.Count > 0)
+        {
+            var recommendations = new StackPanel { Spacing = 8 };
+            recommendations.Children.Add(new TextBlock
+            {
+                Text = "Related",
+                FontSize = 18,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            });
+            foreach (var movie in _vm.DoubanRecommendations.Take(8))
+            {
+                recommendations.Children.Add(UiHelpers.Row(movie.Title, $"{movie.Year}  {movie.Rate}".Trim()));
+            }
+            ContentStack.Children.Add(recommendations);
+        }
     }
 }
