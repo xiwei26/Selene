@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="SeleneNative.Views.PlayerPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:views="using:SeleneNative.Views"
+    HorizontalAlignment="Stretch"
+    VerticalAlignment="Stretch"
+    mc:Ignorable="d">
+    <Grid x:Name="RootLayout" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid x:Name="Header" Grid.Row="0" Padding="28,18,28,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Button x:Name="BackButton" Content="返回" Margin="0,0,12,0" />
+            <StackPanel Grid.Column="1" Spacing="4">
+                <TextBlock x:Name="TitleText" FontSize="22" FontWeight="SemiBold" />
+                <TextBlock x:Name="SubtitleText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+        </Grid>
+
+        <Border
+            Grid.Row="1"
+            Margin="28,0,28,0"
+            MinHeight="420"
+            Background="#050505"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch">
+            <views:NativeVideoPlayerView
+                x:Name="VideoSurface"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch" />
+        </Border>
+
+        <InfoBar
+            x:Name="ErrorBar"
+            Grid.Row="1"
+            Severity="Error"
+            IsOpen="False"
+            IsClosable="True"
+            Title="播放失败"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Bottom"
+            Margin="28,0,28,0" />
+
+        <StackPanel x:Name="ControlPanel" Grid.Row="2" Padding="28,12,28,28" Spacing="12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Slider
+                    x:Name="SeekSlider"
+                    Minimum="0"
+                    Maximum="1"
+                    StepFrequency="1"
+                    SmallChange="5"
+                    LargeChange="30"
+                    IsEnabled="False" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0">
+                    <TextBlock x:Name="PlayTimeText" Text="0:00" />
+                    <TextBlock Text="/" />
+                    <TextBlock x:Name="TotalTimeText" Text="--:--" />
+                </StackPanel>
+            </Grid>
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button x:Name="RetryButton" Content="重试" />
+                <Button x:Name="ToggleOrderButton" Content="反转集数" />
+            </StackPanel>
+
+            <TextBlock Text="播放源" FontWeight="SemiBold" />
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled">
+                <StackPanel x:Name="SourcesRow" Orientation="Horizontal" Spacing="8" />
+            </ScrollViewer>
+
+            <TextBlock Text="选集" FontWeight="SemiBold" />
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled">
+                <StackPanel x:Name="EpisodesRow" Orientation="Horizontal" Spacing="8" />
+            </ScrollViewer>
+        </StackPanel>
+    </Grid>
+</UserControl>

@@ -115,6 +115,10 @@ struct MainView: View {
             let newProvider = ServerAPIClient(baseURL: url, cookie: sessionStore.session?.cookie ?? "")
             provider = newProvider
             searchStore = SearchStore(provider: newProvider)
+            doubanProvider = DoubanAPIClient(
+                backendBaseURL: url,
+                backendCookie: sessionStore.session?.cookie ?? ""
+            )
             if sessionStore.session?.isLocalMode == true {
                 liveProvider = LiveServiceClient(localSources: sessionStore.session?.localLiveSources ?? [])
             } else {
