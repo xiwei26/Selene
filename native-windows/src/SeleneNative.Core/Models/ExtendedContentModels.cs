@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SeleneNative.Core.Models;
@@ -138,6 +139,13 @@ public sealed class VideoPlatformPage
         set => Items = value ?? [];
     }
 
+    [JsonPropertyName("videos")]
+    public List<VideoPlatformItem>? Videos
+    {
+        get => Items;
+        set => Items = value ?? [];
+    }
+
     [JsonPropertyName("nextPageToken")]
     public string? NextPageToken { get; set; }
 
@@ -152,6 +160,7 @@ public sealed class VideoPlatformPage
     public int? Total { get; set; }
 }
 
+[JsonConverter(typeof(VideoPlatformItemJsonConverter))]
 public sealed class VideoPlatformItem
 {
     [JsonPropertyName("id")]
@@ -168,6 +177,19 @@ public sealed class VideoPlatformItem
 
     [JsonPropertyName("description")]
     public string? Description { get; set; }
+
+    [JsonPropertyName("author")]
+    public string? Author { get; set; }
+
+    [JsonPropertyName("publishedAt")]
+    public string? PublishedAt { get; set; }
+
+    [JsonPropertyName("published_at")]
+    public string? PublishedAtSnake
+    {
+        get => PublishedAt;
+        set => PublishedAt = value;
+    }
 
     [JsonPropertyName("playableUrl")]
     public string? PlayableUrl { get; set; }
@@ -197,6 +219,208 @@ public sealed class VideoPlatformItem
 
     [JsonPropertyName("duration")]
     public string? Duration { get; set; }
+}
+
+internal sealed class VideoPlatformItemJsonConverter : JsonConverter<VideoPlatformItem>
+{
+    public override VideoPlatformItem Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options)
+    {
+        using var document = JsonDocument.ParseValue(ref reader);
+        var root = document.RootElement;
+        var snippet = GetObject(root, "snippet");
+
+        var thumbnail = FirstNonBlank(
+            GetString(root, "thumbnail"),
+            GetString(root, "cover"),
+            GetString(root, "pic"),
+            GetString(root, "image"),
+            snippet is { } snippetElement ? GetYouTubeThumbnail(snippetElement) : null);
+        var cover = FirstNonBlank(
+            GetString(root, "cover"),
+            GetString(root, "thumbnail"),
+            GetString(root, "pic"),
+            GetString(root, "image"),
+            thumbnail);
+
+        return new VideoPlatformItem
+        {
+            Id = FirstNonBlank(
+                GetString(root, "bvid"),
+                GetYouTubeId(root),
+                GetString(root, "id"),
+                GetString(root, "aid")) ?? string.Empty,
+            Title = FirstNonBlank(
+                GetString(root, "title"),
+                snippet is { } snippetElementForTitle ? GetString(snippetElementForTitle, "title") : null) ?? string.Empty,
+            Thumbnail = thumbnail,
+            Cover = cover,
+            Description = FirstNonBlank(
+                GetString(root, "description"),
+                GetString(root, "desc"),
+                snippet is { } snippetElementForDescription ? GetString(snippetElementForDescription, "description") : null),
+            Author = FirstNonBlank(
+                GetString(root, "author"),
+                GetNestedString(root, "owner", "name"),
+                GetNestedString(root, "channel", "title"),
+                snippet is { } snippetElementForAuthor ? GetString(snippetElementForAuthor, "channelTitle") : null),
+            PublishedAt = FirstNonBlank(
+                GetString(root, "publishedAt"),
+                GetString(root, "published_at"),
+                GetString(root, "pubdate"),
+                snippet is { } snippetElementForDate ? GetString(snippetElementForDate, "publishedAt") : null),
+            PlayableUrl = FirstNonBlank(GetString(root, "playableUrl"), GetString(root, "playable_url")),
+            ProxyUrl = FirstNonBlank(GetString(root, "proxyUrl"), GetString(root, "proxy_url")),
+            Url = GetString(root, "url"),
+            Views = FirstNonBlank(GetString(root, "views"), GetString(root, "play")),
+            Duration = GetString(root, "duration")
+        };
+    }
+
+    public override void Write(
+        Utf8JsonWriter writer,
+        VideoPlatformItem value,
+        JsonSerializerOptions options)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("id", value.Id);
+        writer.WriteString("title", value.Title);
+        WriteStringIfPresent(writer, "thumbnail", value.Thumbnail);
+        WriteStringIfPresent(writer, "cover", value.Cover);
+        WriteStringIfPresent(writer, "description", value.Description);
+        WriteStringIfPresent(writer, "author", value.Author);
+        WriteStringIfPresent(writer, "publishedAt", value.PublishedAt);
+        WriteStringIfPresent(writer, "playableUrl", value.PlayableUrl);
+        WriteStringIfPresent(writer, "proxyUrl", value.ProxyUrl);
+        WriteStringIfPresent(writer, "url", value.Url);
+        WriteStringIfPresent(writer, "views", value.Views);
+        WriteStringIfPresent(writer, "duration", value.Duration);
+        writer.WriteEndObject();
+    }
+
+    private static JsonElement? GetObject(JsonElement element, string propertyName)
+    {
+        return TryGetProperty(element, propertyName, out var property) && property.ValueKind == JsonValueKind.Object
+            ? property
+            : null;
+    }
+
+    private static string? GetString(JsonElement element, string propertyName)
+    {
+        if (!TryGetProperty(element, propertyName, out var property))
+        {
+            return null;
+        }
+
+        return property.ValueKind switch
+        {
+            JsonValueKind.String => property.GetString(),
+            JsonValueKind.Number => property.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => null
+        };
+    }
+
+    private static string? GetNestedString(JsonElement element, string objectName, string propertyName)
+    {
+        return GetObject(element, objectName) is { } nested
+            ? GetString(nested, propertyName)
+            : null;
+    }
+
+    private static string? GetYouTubeId(JsonElement element)
+    {
+        if (!TryGetProperty(element, "id", out var id))
+        {
+            return null;
+        }
+
+        if (id.ValueKind == JsonValueKind.String)
+        {
+            return id.GetString();
+        }
+
+        if (id.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        return FirstNonBlank(
+            GetString(id, "videoId"),
+            GetString(id, "channelId"),
+            GetString(id, "playlistId"),
+            GetString(id, "kind"));
+    }
+
+    private static string? GetYouTubeThumbnail(JsonElement snippet)
+    {
+        if (!TryGetProperty(snippet, "thumbnails", out var thumbnails) ||
+            thumbnails.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        foreach (var size in new[] { "maxres", "standard", "high", "medium", "default" })
+        {
+            if (GetNestedString(thumbnails, size, "url") is { Length: > 0 } url)
+            {
+                return url;
+            }
+        }
+
+        foreach (var thumbnail in thumbnails.EnumerateObject())
+        {
+            if (thumbnail.Value.ValueKind == JsonValueKind.Object &&
+                GetString(thumbnail.Value, "url") is { Length: > 0 } url)
+            {
+                return url;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool TryGetProperty(JsonElement element, string propertyName, out JsonElement property)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            property = default;
+            return false;
+        }
+
+        if (element.TryGetProperty(propertyName, out property))
+        {
+            return true;
+        }
+
+        foreach (var candidate in element.EnumerateObject())
+        {
+            if (string.Equals(candidate.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                property = candidate.Value;
+                return true;
+            }
+        }
+
+        property = default;
+        return false;
+    }
+
+    private static string? FirstNonBlank(params string?[] values)
+    {
+        return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+    }
+
+    private static void WriteStringIfPresent(Utf8JsonWriter writer, string propertyName, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            writer.WriteString(propertyName, value);
+        }
+    }
 }
 
 public sealed class YouTubeRegion

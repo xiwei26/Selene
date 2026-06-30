@@ -201,6 +201,7 @@ struct VideoPlatformItem: Identifiable, Codable, Hashable, Sendable {
     var title: String
     var cover: String
     var author: String?
+    var desc: String?
     var duration: String?
     var views: String?
     var publishedAt: String?
@@ -209,20 +210,39 @@ struct VideoPlatformItem: Identifiable, Codable, Hashable, Sendable {
     var url: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, title, cover, thumbnail, author, duration, views, url
+        case id, bvid, aid, title, cover, thumbnail, pic, image, author, duration, views, play, url, description, desc, snippet
         case publishedAt = "publishedAt"
         case publishedAtSnake = "published_at"
+        case pubdate
         case playableUrl = "playableUrl"
         case playableURL = "playable_url"
         case proxyUrl = "proxyUrl"
         case proxyURL = "proxy_url"
     }
 
-    init(id: String, title: String, cover: String = "", author: String? = nil, duration: String? = nil, views: String? = nil, publishedAt: String? = nil, playableUrl: String? = nil, proxyUrl: String? = nil, url: String? = nil) {
+    private enum YouTubeIDKeys: String, CodingKey {
+        case videoId, channelId, playlistId, kind
+    }
+
+    private enum YouTubeSnippetKeys: String, CodingKey {
+        case title, description, channelTitle, publishedAt, thumbnails
+    }
+
+    private enum YouTubeThumbnailSizeKeys: String, CodingKey {
+        case maxres, standard, high, medium
+        case defaultSize = "default"
+    }
+
+    private enum YouTubeThumbnailKeys: String, CodingKey {
+        case url
+    }
+
+    init(id: String, title: String, cover: String = "", author: String? = nil, desc: String? = nil, duration: String? = nil, views: String? = nil, publishedAt: String? = nil, playableUrl: String? = nil, proxyUrl: String? = nil, url: String? = nil) {
         self.id = id
         self.title = title
         self.cover = cover
         self.author = author
+        self.desc = desc
         self.duration = duration
         self.views = views
         self.publishedAt = publishedAt
@@ -233,16 +253,34 @@ struct VideoPlatformItem: Identifiable, Codable, Hashable, Sendable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeFlexibleString(forKey: .id)
-        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        let snippet = try? container.nestedContainer(keyedBy: YouTubeSnippetKeys.self, forKey: .snippet)
+
+        id = (try? container.decodeFlexibleString(forKey: .bvid))
+            ?? Self.decodeYouTubeID(from: container)
+            ?? (try? container.decodeFlexibleString(forKey: .id))
+            ?? (try? container.decodeFlexibleString(forKey: .aid))
+            ?? ""
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+            ?? snippet?.decodeIfPresent(String.self, forKey: .title)
+            ?? ""
         cover = try container.decodeIfPresent(String.self, forKey: .cover)
             ?? container.decodeIfPresent(String.self, forKey: .thumbnail)
+            ?? container.decodeIfPresent(String.self, forKey: .pic)
+            ?? container.decodeIfPresent(String.self, forKey: .image)
+            ?? Self.decodeYouTubeThumbnail(from: snippet)
             ?? ""
         author = try container.decodeIfPresent(String.self, forKey: .author)
+            ?? snippet?.decodeIfPresent(String.self, forKey: .channelTitle)
+        desc = try container.decodeIfPresent(String.self, forKey: .desc)
+            ?? container.decodeIfPresent(String.self, forKey: .description)
+            ?? snippet?.decodeIfPresent(String.self, forKey: .description)
         duration = try container.decodeIfPresent(String.self, forKey: .duration)
-        views = try container.decodeIfPresent(String.self, forKey: .views)
+        views = (try? container.decodeFlexibleString(forKey: .views))
+            ?? (try? container.decodeFlexibleString(forKey: .play))
         publishedAt = try container.decodeIfPresent(String.self, forKey: .publishedAt)
             ?? container.decodeIfPresent(String.self, forKey: .publishedAtSnake)
+            ?? (try? container.decodeFlexibleString(forKey: .pubdate))
+            ?? snippet?.decodeIfPresent(String.self, forKey: .publishedAt)
         playableUrl = try container.decodeIfPresent(String.self, forKey: .playableUrl)
             ?? container.decodeIfPresent(String.self, forKey: .playableURL)
         proxyUrl = try container.decodeIfPresent(String.self, forKey: .proxyUrl)
@@ -256,12 +294,40 @@ struct VideoPlatformItem: Identifiable, Codable, Hashable, Sendable {
         try container.encode(title, forKey: .title)
         try container.encode(cover, forKey: .cover)
         try container.encodeIfPresent(author, forKey: .author)
+        try container.encodeIfPresent(desc, forKey: .desc)
         try container.encodeIfPresent(duration, forKey: .duration)
         try container.encodeIfPresent(views, forKey: .views)
         try container.encodeIfPresent(publishedAt, forKey: .publishedAt)
         try container.encodeIfPresent(playableUrl, forKey: .playableUrl)
         try container.encodeIfPresent(proxyUrl, forKey: .proxyUrl)
         try container.encodeIfPresent(url, forKey: .url)
+    }
+
+    private static func decodeYouTubeID(from container: KeyedDecodingContainer<CodingKeys>) -> String? {
+        guard let idContainer = try? container.nestedContainer(keyedBy: YouTubeIDKeys.self, forKey: .id) else {
+            return nil
+        }
+        return (try? idContainer.decodeIfPresent(String.self, forKey: .videoId))
+            ?? (try? idContainer.decodeIfPresent(String.self, forKey: .channelId))
+            ?? (try? idContainer.decodeIfPresent(String.self, forKey: .playlistId))
+            ?? (try? idContainer.decodeIfPresent(String.self, forKey: .kind))
+    }
+
+    private static func decodeYouTubeThumbnail(from snippet: KeyedDecodingContainer<YouTubeSnippetKeys>?) -> String? {
+        guard let snippet,
+              let thumbnails = try? snippet.nestedContainer(keyedBy: YouTubeThumbnailSizeKeys.self, forKey: .thumbnails) else {
+            return nil
+        }
+
+        let sizes: [YouTubeThumbnailSizeKeys] = [.maxres, .standard, .high, .medium, .defaultSize]
+        for size in sizes {
+            if let thumbnail = try? thumbnails.nestedContainer(keyedBy: YouTubeThumbnailKeys.self, forKey: size),
+               let url = try? thumbnail.decodeIfPresent(String.self, forKey: .url),
+               !url.isEmpty {
+                return url
+            }
+        }
+        return nil
     }
 }
 

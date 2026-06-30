@@ -47,7 +47,7 @@ public sealed class ShortDramaClient(string baseUrl, string cookie = "", HttpCli
         return await GetJsonAsync<ShortDramaListResult>(
             "/api/shortdrama/list",
             [
-                new KeyValuePair<string, string?>("category", categoryId),
+                new KeyValuePair<string, string?>("categoryId", categoryId),
                 new KeyValuePair<string, string?>("page", page.ToString()),
                 new KeyValuePair<string, string?>("size", pageSize.ToString())
             ],

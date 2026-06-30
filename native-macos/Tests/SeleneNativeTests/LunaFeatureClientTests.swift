@@ -119,6 +119,45 @@ final class LunaFeatureClientTests: XCTestCase {
         XCTAssertEqual(page.items.first?.id, "yt1")
     }
 
+    func testBilibiliVideoItemDecodesLunaTvShape() throws {
+        let json = #"{"videos":[{"bvid":"BV1","title":"Popular","pic":"p.jpg","play":12345,"pubdate":1710000000}]}"#
+
+        let page = try JSONDecoder().decode(VideoPlatformPage.self, from: Data(json.utf8))
+        let item = try XCTUnwrap(page.items.first)
+
+        XCTAssertEqual(item.id, "BV1")
+        XCTAssertEqual(item.title, "Popular")
+        XCTAssertEqual(item.cover, "p.jpg")
+        XCTAssertEqual(item.views, "12345")
+        XCTAssertEqual(item.publishedAt, "1710000000")
+    }
+
+    func testYouTubeVideoItemDecodesRawApiShape() throws {
+        let json = #"{"videos":[{"id":{"videoId":"yt1","kind":"youtube#video"},"snippet":{"title":"Trailer","description":"Desc","channelTitle":"Studio","publishedAt":"2026-01-02T00:00:00Z","thumbnails":{"default":{"url":"small.jpg"},"high":{"url":"large.jpg"}}}}]}"#
+
+        let page = try JSONDecoder().decode(VideoPlatformPage.self, from: Data(json.utf8))
+        let item = try XCTUnwrap(page.items.first)
+
+        XCTAssertEqual(item.id, "yt1")
+        XCTAssertEqual(item.title, "Trailer")
+        XCTAssertEqual(item.cover, "large.jpg")
+        XCTAssertEqual(item.author, "Studio")
+        XCTAssertEqual(item.publishedAt, "2026-01-02T00:00:00Z")
+        XCTAssertEqual(item.desc, "Desc")
+    }
+
+    func testYouTubeVideoItemKeepsLegacyTopLevelShape() throws {
+        let json = #"{"items":[{"id":"legacy","title":"Legacy","cover":"cover.jpg","thumbnail":"thumb.jpg","views":"99"}]}"#
+
+        let page = try JSONDecoder().decode(VideoPlatformPage.self, from: Data(json.utf8))
+        let item = try XCTUnwrap(page.items.first)
+
+        XCTAssertEqual(item.id, "legacy")
+        XCTAssertEqual(item.title, "Legacy")
+        XCTAssertEqual(item.cover, "cover.jpg")
+        XCTAssertEqual(item.views, "99")
+    }
+
     func testYouTubeRegionsDecodeRegionsEnvelope() async throws {
         LunaFeatureTestURLProtocol.requestHandler = { request in
             XCTAssertEqual(request.url?.path, "/api/youtube/regions")

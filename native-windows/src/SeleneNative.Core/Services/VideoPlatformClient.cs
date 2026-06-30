@@ -22,8 +22,8 @@ public sealed class VideoPlatformClient(string baseUrl, string cookie = "", Http
         return await GetJsonAsync<VideoPlatformPage>(
             "/api/bilibili/popular",
             [
-                new KeyValuePair<string, string?>("page", page.ToString()),
-                new KeyValuePair<string, string?>("size", pageSize.ToString())
+                new KeyValuePair<string, string?>("pn", page.ToString()),
+                new KeyValuePair<string, string?>("ps", pageSize.ToString())
             ],
             cancellationToken).ConfigureAwait(false) ?? new VideoPlatformPage();
     }
@@ -34,7 +34,7 @@ public sealed class VideoPlatformClient(string baseUrl, string cookie = "", Http
     {
         return await GetJsonAsync<VideoPlatformPage>(
             "/api/bilibili/search",
-            [new KeyValuePair<string, string?>("query", query)],
+            [new KeyValuePair<string, string?>("q", query)],
             cancellationToken).ConfigureAwait(false) ?? new VideoPlatformPage();
     }
 
@@ -62,7 +62,7 @@ public sealed class VideoPlatformClient(string baseUrl, string cookie = "", Http
         return await GetJsonAsync<VideoPlatformPage>(
             "/api/youtube/search",
             [
-                new KeyValuePair<string, string?>("query", query),
+                new KeyValuePair<string, string?>("q", query),
                 new KeyValuePair<string, string?>("contentType", contentType),
                 new KeyValuePair<string, string?>("order", order),
                 new KeyValuePair<string, string?>("maxResults", maxResults.ToString())

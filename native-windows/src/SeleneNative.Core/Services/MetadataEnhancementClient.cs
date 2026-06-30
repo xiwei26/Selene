@@ -28,9 +28,9 @@ public sealed class MetadataEnhancementClient(string baseUrl, string cookie = ""
             "/api/tmdb/backdrop",
             [
                 new KeyValuePair<string, string?>("title", title),
-                new KeyValuePair<string, string?>("originalTitle", originalTitle),
+                new KeyValuePair<string, string?>("original_title", originalTitle),
                 new KeyValuePair<string, string?>("year", year),
-                new KeyValuePair<string, string?>("sourceType", sourceType)
+                new KeyValuePair<string, string?>("stype", sourceType)
             ],
             cancellationToken);
     }
