@@ -27,6 +27,27 @@ final class ShortDramaStoreTests: XCTestCase {
 
         XCTAssertEqual(url?.absoluteString, "https://video.example/1.m3u8")
     }
+
+    @MainActor
+    func testPlayEpisodeBuildsSearchResultForHistory() async {
+        let provider = FakeShortDramaProvider(parseResult: ShortDramaParseResult(parsedUrl: "https://video.example/1.m3u8"))
+        let store = ShortDramaStore(provider: provider)
+
+        let request = await store.playRequest(
+            for: ShortDramaItem(id: "s1", name: "Short One", cover: "c.jpg", year: "2026", category: "hot"),
+            episode: 3
+        )
+
+        XCTAssertEqual(request?.url.absoluteString, "https://video.example/1.m3u8")
+        XCTAssertEqual(request?.result.source, "shortdrama")
+        XCTAssertEqual(request?.result.sourceName, "Short Drama")
+        XCTAssertEqual(request?.result.id, "s1")
+        XCTAssertEqual(request?.result.title, "Short One")
+        XCTAssertEqual(request?.result.poster, "c.jpg")
+        XCTAssertEqual(request?.result.year, "2026")
+        XCTAssertEqual(request?.result.episodes, ["https://video.example/1.m3u8"])
+        XCTAssertEqual(request?.index, 0)
+    }
 }
 
 private struct FakeShortDramaProvider: ShortDramaProviding {

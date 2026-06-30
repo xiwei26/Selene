@@ -17,13 +17,13 @@ final class VideoPlatformAPIClient: VideoPlatformProviding, Sendable {
 
     func loadBilibiliPopular(page: Int = 1, pageSize: Int = 20) async throws -> VideoPlatformPage {
         try await loadPage(path: "/api/bilibili/popular", queryItems: [
-            URLQueryItem(name: "page", value: "\(page)"),
-            URLQueryItem(name: "size", value: "\(pageSize)")
+            URLQueryItem(name: "pn", value: "\(page)"),
+            URLQueryItem(name: "ps", value: "\(pageSize)")
         ])
     }
 
     func searchBilibili(query: String) async throws -> VideoPlatformPage {
-        try await loadPage(path: "/api/bilibili/search", queryItems: [URLQueryItem(name: "query", value: query)])
+        try await loadPage(path: "/api/bilibili/search", queryItems: [URLQueryItem(name: "q", value: query)])
     }
 
     func loadYouTubePopular(regionCode: String = "US", pageToken: String? = nil) async throws -> VideoPlatformPage {
@@ -34,7 +34,7 @@ final class VideoPlatformAPIClient: VideoPlatformProviding, Sendable {
 
     func searchYouTube(query: String, contentType: String = "all", order: String = "relevance", maxResults: Int = 25) async throws -> VideoPlatformPage {
         try await loadPage(path: "/api/youtube/search", queryItems: [
-            URLQueryItem(name: "query", value: query),
+            URLQueryItem(name: "q", value: query),
             URLQueryItem(name: "contentType", value: contentType),
             URLQueryItem(name: "order", value: order),
             URLQueryItem(name: "maxResults", value: "\(maxResults)")
@@ -42,6 +42,9 @@ final class VideoPlatformAPIClient: VideoPlatformProviding, Sendable {
     }
 
     func loadYouTubeRegions() async throws -> [YouTubeRegion] {
+        if let enveloped = try? await request.getJSON(path: "/api/youtube/regions", as: YouTubeRegionsResponse.self) {
+            return enveloped.regions
+        }
         if let wrapped = try? await request.getJSON(path: "/api/youtube/regions", as: LunaDataResponse<[YouTubeRegion]>.self) {
             return wrapped.data
         }
@@ -54,4 +57,8 @@ final class VideoPlatformAPIClient: VideoPlatformProviding, Sendable {
         }
         return try await request.getJSON(path: path, queryItems: queryItems, as: VideoPlatformPage.self)
     }
+}
+
+private struct YouTubeRegionsResponse: Decodable {
+    let regions: [YouTubeRegion]
 }

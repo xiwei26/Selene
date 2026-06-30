@@ -87,6 +87,11 @@ final class ShortDramaStore {
     }
 
     func playURL(for item: ShortDramaItem, episode: Int) async -> URL? {
+        guard let request = await playRequest(for: item, episode: episode) else { return nil }
+        return request.url
+    }
+
+    func playRequest(for item: ShortDramaItem, episode: Int) async -> (url: URL, result: SearchResult, index: Int)? {
         do {
             guard let result = try await provider.parse(id: item.id, episode: episode, name: item.name) else {
                 errorMessage = "Short drama playback URL is unavailable"
@@ -95,7 +100,8 @@ final class ShortDramaStore {
             for candidate in [result.parsedUrl, result.proxyUrl, result.url].compactMap({ $0 }) {
                 if let url = URL(string: candidate), ["http", "https"].contains(url.scheme?.lowercased()) {
                     errorMessage = nil
-                    return url
+                    let searchResult = item.searchResult(episodeURL: url.absoluteString, episode: episode)
+                    return (url, searchResult, 0)
                 }
             }
             errorMessage = "Short drama playback URL is unavailable"
@@ -104,5 +110,23 @@ final class ShortDramaStore {
             errorMessage = error.localizedDescription
             return nil
         }
+    }
+}
+
+extension ShortDramaItem {
+    func searchResult(episodeURL: String, episode: Int) -> SearchResult {
+        SearchResult(
+            id: id,
+            title: name,
+            poster: cover,
+            episodes: [episodeURL],
+            episodeTitles: ["Episode \(episode)"],
+            source: "shortdrama",
+            sourceName: "Short Drama",
+            className: category,
+            year: year ?? "",
+            description: desc,
+            typeName: category
+        )
     }
 }

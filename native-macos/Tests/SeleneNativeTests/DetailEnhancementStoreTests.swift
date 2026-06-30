@@ -17,6 +17,19 @@ final class DetailEnhancementStoreTests: XCTestCase {
         XCTAssertEqual(store.comments.count, 1)
         XCTAssertEqual(store.recommendations.count, 1)
     }
+
+    @MainActor
+    func testLoadWithDoubanIdKeepsQuickInfoRatingAndSummary() async {
+        let provider = FakeMetadataEnhancementProvider(
+            quickInfo: DoubanQuickInfo(id: "1292052", title: "Title", summary: "Summary", rating: "9.7", year: "1994")
+        )
+        let store = DetailEnhancementStore(provider: provider)
+
+        await store.load(title: "Title", year: "1994", sourceType: "movie", doubanId: 1292052)
+
+        XCTAssertEqual(store.quickInfo?.rating, "9.7")
+        XCTAssertEqual(store.quickInfo?.summary, "Summary")
+    }
 }
 
 private struct FakeMetadataEnhancementProvider: MetadataEnhancementProviding {

@@ -3,7 +3,7 @@ import SwiftUI
 struct VideoPlatformView: View {
     @Bindable var store: VideoPlatformStore
     let kind: VideoPlatformKind
-    let onPlayURL: (URL) -> Void
+    let onPlayURL: (URL, SearchResult, Int) -> Void
     private let columns = [GridItem(.adaptive(minimum: 260, maximum: 360), spacing: 12)]
 
     var body: some View {
@@ -97,8 +97,8 @@ struct VideoPlatformView: View {
                 subtitle: item.views ?? item.duration
             )
             Button {
-                if let url = store.playableURL(for: item) {
-                    onPlayURL(url)
+                if let request = store.directPlayRequest(for: item) {
+                    onPlayURL(request.url, request.result, request.index)
                 }
             } label: {
                 Label("Play", systemImage: "play.fill")

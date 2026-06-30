@@ -97,10 +97,14 @@ final class VideoPlatformStore {
     }
 
     func playableURL(for item: VideoPlatformItem) -> URL? {
-        for candidate in [item.playableUrl, item.proxyUrl, item.url].compactMap({ $0 }) {
+        directPlayRequest(for: item)?.url
+    }
+
+    func directPlayRequest(for item: VideoPlatformItem) -> (url: URL, result: SearchResult, index: Int)? {
+        for candidate in [item.playableUrl, item.proxyUrl].compactMap({ $0 }) {
             if let url = URL(string: candidate), ["http", "https"].contains(url.scheme?.lowercased()) {
                 errorMessage = nil
-                return url
+                return (url, item.searchResult(source: kind.rawValue, sourceName: kind.title, episodeURL: url.absoluteString), 0)
             }
         }
         errorMessage = "Current item has no playable URL"
@@ -110,5 +114,22 @@ final class VideoPlatformStore {
     private func apply(_ page: VideoPlatformPage) {
         items = page.items
         nextPageToken = page.nextPageToken
+    }
+}
+
+extension VideoPlatformItem {
+    func searchResult(source: String, sourceName: String, episodeURL: String) -> SearchResult {
+        SearchResult(
+            id: id,
+            title: title,
+            poster: cover,
+            episodes: [episodeURL],
+            episodeTitles: [title],
+            source: source,
+            sourceName: sourceName,
+            year: publishedAt ?? "",
+            description: author,
+            typeName: sourceName
+        )
     }
 }

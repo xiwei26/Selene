@@ -20,9 +20,9 @@ final class MetadataEnhancementAPIClient: MetadataEnhancementProviding, Sendable
 
     func loadBackdrop(title: String, originalTitle: String? = nil, year: String? = nil, sourceType: String? = nil) async throws -> TmdbBackdropResult? {
         var queryItems = [URLQueryItem(name: "title", value: title)]
-        if let originalTitle { queryItems.append(URLQueryItem(name: "originalTitle", value: originalTitle)) }
+        if let originalTitle { queryItems.append(URLQueryItem(name: "original_title", value: originalTitle)) }
         if let year { queryItems.append(URLQueryItem(name: "year", value: year)) }
-        if let sourceType { queryItems.append(URLQueryItem(name: "sourceType", value: sourceType)) }
+        if let sourceType { queryItems.append(URLQueryItem(name: "stype", value: sourceType)) }
         return try await optional(path: "/api/tmdb/backdrop", queryItems: queryItems, as: TmdbBackdropResult.self)
     }
 
@@ -51,11 +51,15 @@ final class MetadataEnhancementAPIClient: MetadataEnhancementProviding, Sendable
     }
 
     func loadDoubanRecommends(kind: String, limit: Int = 20, start: Int = 0) async throws -> [DoubanMovie] {
-        try await array(path: "/api/douban/recommends", queryItems: [
+        let queryItems = [
             URLQueryItem(name: "kind", value: kind),
             URLQueryItem(name: "limit", value: "\(limit)"),
             URLQueryItem(name: "start", value: "\(start)")
-        ])
+        ]
+        if let list = try? await request.getJSON(path: "/api/douban/recommends", queryItems: queryItems, as: DoubanListResponse<DoubanMovie>.self) {
+            return list.list
+        }
+        return try await array(path: "/api/douban/recommends", queryItems: queryItems)
     }
 
     func loadDoubanQuickInfo(id: String) async throws -> DoubanQuickInfo? {
@@ -98,4 +102,8 @@ final class MetadataEnhancementAPIClient: MetadataEnhancementProviding, Sendable
 
 private struct DoubanCommentsPayload: Decodable {
     let comments: [DoubanComment]
+}
+
+private struct DoubanListResponse<T: Decodable>: Decodable {
+    let list: [T]
 }

@@ -27,6 +27,42 @@ final class VideoPlatformStoreTests: XCTestCase {
         XCTAssertEqual(store.regions.count, 1)
         XCTAssertEqual(store.items.count, 1)
     }
+
+    @MainActor
+    func testDirectPlayRequestBuildsSearchResultForHistory() {
+        let store = VideoPlatformStore(provider: FakeVideoPlatformProvider(), kind: .bilibili)
+        let item = VideoPlatformItem(
+            id: "BV1",
+            title: "Playable",
+            cover: "c.jpg",
+            publishedAt: "2026",
+            playableUrl: "https://video.example/bv1.m3u8",
+            url: "https://www.bilibili.com/video/BV1"
+        )
+
+        let request = store.directPlayRequest(for: item)
+
+        XCTAssertEqual(request?.url.absoluteString, "https://video.example/bv1.m3u8")
+        XCTAssertEqual(request?.result.source, "bilibili")
+        XCTAssertEqual(request?.result.sourceName, "Bilibili")
+        XCTAssertEqual(request?.result.episodes, ["https://video.example/bv1.m3u8"])
+        XCTAssertEqual(request?.result.poster, "c.jpg")
+        XCTAssertEqual(request?.result.year, "2026")
+        XCTAssertEqual(request?.index, 0)
+    }
+
+    @MainActor
+    func testOrdinaryWebpageUrlIsNotPlayable() {
+        let store = VideoPlatformStore(provider: FakeVideoPlatformProvider(), kind: .youtube)
+        let item = VideoPlatformItem(
+            id: "yt1",
+            title: "Web Only",
+            url: "https://www.youtube.com/watch?v=yt1"
+        )
+
+        XCTAssertNil(store.directPlayRequest(for: item))
+        XCTAssertEqual(store.errorMessage, "Current item has no playable URL")
+    }
 }
 
 private struct FakeVideoPlatformProvider: VideoPlatformProviding {

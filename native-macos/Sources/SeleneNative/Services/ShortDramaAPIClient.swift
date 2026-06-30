@@ -31,7 +31,7 @@ final class ShortDramaAPIClient: ShortDramaProviding, Sendable {
 
     func loadList(categoryId: String, page: Int = 1, pageSize: Int = 24) async throws -> ShortDramaListResult {
         try await loadListResponse(path: "/api/shortdrama/list", queryItems: [
-            URLQueryItem(name: "category", value: categoryId),
+            URLQueryItem(name: "categoryId", value: categoryId),
             URLQueryItem(name: "page", value: "\(page)"),
             URLQueryItem(name: "size", value: "\(pageSize)")
         ])

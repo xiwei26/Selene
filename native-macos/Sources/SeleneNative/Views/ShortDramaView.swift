@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ShortDramaView: View {
     @Bindable var store: ShortDramaStore
-    let onPlayURL: (URL) -> Void
+    let onPlayURL: (URL, SearchResult, Int) -> Void
     private let columns = [GridItem(.adaptive(minimum: 240, maximum: 320), spacing: 12)]
 
     var body: some View {
@@ -99,8 +99,8 @@ struct ShortDramaView: View {
             )
             Button {
                 Task {
-                    if let url = await store.playURL(for: item, episode: 1) {
-                        onPlayURL(url)
+                    if let request = await store.playRequest(for: item, episode: 1) {
+                        onPlayURL(request.url, request.result, request.index)
                     }
                 }
             } label: {

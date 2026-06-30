@@ -241,9 +241,9 @@ struct MainView: View {
     }
 
     @MainActor
-    private func playDirectURL(_ url: URL) {
+    private func playDirectURL(_ url: URL, result: SearchResult, index: Int) {
         playerStore.currentSourceResults = []
-        playerStore.replaceItem(url: url)
+        playerStore.replaceItem(url: url, result: result, index: index)
         playerStore.play()
         isPlaying = true
     }

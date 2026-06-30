@@ -4,10 +4,35 @@ struct ShortDramaCategory: Identifiable, Codable, Hashable, Sendable {
     var id: String
     var name: String
     var type: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, type
+        case typeID = "type_id"
+        case typeName = "type_name"
+    }
+
     init(id: String, name: String, type: String? = nil) {
         self.id = id
         self.name = name
         self.type = type
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? container.decodeFlexibleString(forKey: .id))
+            ?? (try? container.decodeFlexibleString(forKey: .typeID))
+            ?? ""
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+            ?? container.decodeIfPresent(String.self, forKey: .typeName)
+            ?? ""
+        type = try container.decodeIfPresent(String.self, forKey: .type)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encodeIfPresent(type, forKey: .type)
     }
 }
 
@@ -51,6 +76,17 @@ struct ShortDramaItem: Identifiable, Codable, Hashable, Sendable {
         episodeCount = container.decodeFlexibleIntIfPresent(forKey: .episodeCount)
             ?? container.decodeFlexibleIntIfPresent(forKey: .totalEpisodes)
     }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(cover, forKey: .cover)
+        try container.encodeIfPresent(desc, forKey: .desc)
+        try container.encodeIfPresent(year, forKey: .year)
+        try container.encodeIfPresent(category, forKey: .category)
+        try container.encodeIfPresent(episodeCount, forKey: .episodeCount)
+    }
 }
 
 struct ShortDramaListResult: Codable, Hashable, Sendable {
@@ -72,6 +108,13 @@ struct ShortDramaListResult: Codable, Hashable, Sendable {
     }
 
     init(from decoder: Decoder) throws {
+        if let rawItems = try? [ShortDramaItem](from: decoder) {
+            items = rawItems
+            total = rawItems.count
+            page = nil
+            pageSize = nil
+            return
+        }
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if let data = try? container.decode(ShortDramaListResult.self, forKey: .data) {
             self = data
@@ -83,6 +126,14 @@ struct ShortDramaListResult: Codable, Hashable, Sendable {
         total = (try? container.decodeFlexibleInt(forKey: .total)) ?? items.count
         page = try? container.decodeFlexibleInt(forKey: .page)
         pageSize = try? container.decodeFlexibleInt(forKey: .pageSize)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(items, forKey: .items)
+        try container.encode(total, forKey: .total)
+        try container.encodeIfPresent(page, forKey: .page)
+        try container.encodeIfPresent(pageSize, forKey: .pageSize)
     }
 }
 
@@ -135,6 +186,13 @@ struct ShortDramaParseResult: Codable, Hashable, Sendable {
         proxyUrl = try container.decodeIfPresent(String.self, forKey: .proxyUrl)
             ?? container.decodeIfPresent(String.self, forKey: .proxyURL)
         url = try container.decodeIfPresent(String.self, forKey: .url)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(parsedUrl, forKey: .parsedUrl)
+        try container.encodeIfPresent(proxyUrl, forKey: .proxyUrl)
+        try container.encodeIfPresent(url, forKey: .url)
     }
 }
 
@@ -191,6 +249,20 @@ struct VideoPlatformItem: Identifiable, Codable, Hashable, Sendable {
             ?? container.decodeIfPresent(String.self, forKey: .proxyURL)
         url = try container.decodeIfPresent(String.self, forKey: .url)
     }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(title, forKey: .title)
+        try container.encode(cover, forKey: .cover)
+        try container.encodeIfPresent(author, forKey: .author)
+        try container.encodeIfPresent(duration, forKey: .duration)
+        try container.encodeIfPresent(views, forKey: .views)
+        try container.encodeIfPresent(publishedAt, forKey: .publishedAt)
+        try container.encodeIfPresent(playableUrl, forKey: .playableUrl)
+        try container.encodeIfPresent(proxyUrl, forKey: .proxyUrl)
+        try container.encodeIfPresent(url, forKey: .url)
+    }
 }
 
 struct VideoPlatformPage: Codable, Hashable, Sendable {
@@ -199,7 +271,7 @@ struct VideoPlatformPage: Codable, Hashable, Sendable {
     var total: Int?
 
     enum CodingKeys: String, CodingKey {
-        case items, list, data, total
+        case items, list, videos, data, total
         case nextPageToken = "nextPageToken"
         case nextPageTokenSnake = "next_page_token"
     }
@@ -211,6 +283,12 @@ struct VideoPlatformPage: Codable, Hashable, Sendable {
     }
 
     init(from decoder: Decoder) throws {
+        if let rawItems = try? [VideoPlatformItem](from: decoder) {
+            items = rawItems
+            nextPageToken = nil
+            total = rawItems.count
+            return
+        }
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if let data = try? container.decode(VideoPlatformPage.self, forKey: .data) {
             self = data
@@ -218,10 +296,18 @@ struct VideoPlatformPage: Codable, Hashable, Sendable {
         }
         items = (try? container.decode([VideoPlatformItem].self, forKey: .items))
             ?? (try? container.decode([VideoPlatformItem].self, forKey: .list))
+            ?? (try? container.decode([VideoPlatformItem].self, forKey: .videos))
             ?? []
         nextPageToken = try container.decodeIfPresent(String.self, forKey: .nextPageToken)
             ?? container.decodeIfPresent(String.self, forKey: .nextPageTokenSnake)
         total = try? container.decodeFlexibleInt(forKey: .total)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(items, forKey: .items)
+        try container.encodeIfPresent(nextPageToken, forKey: .nextPageToken)
+        try container.encodeIfPresent(total, forKey: .total)
     }
 }
 
@@ -237,6 +323,7 @@ struct TmdbBackdropResult: Codable, Hashable, Sendable {
     var posterUrl: String?
 
     enum CodingKeys: String, CodingKey {
+        case backdrop, logo, poster
         case backdropUrl = "backdropUrl"
         case backdropURL = "backdrop_url"
         case logoUrl = "logoUrl"
@@ -255,10 +342,20 @@ struct TmdbBackdropResult: Codable, Hashable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         backdropUrl = try container.decodeIfPresent(String.self, forKey: .backdropUrl)
             ?? container.decodeIfPresent(String.self, forKey: .backdropURL)
+            ?? container.decodeIfPresent(String.self, forKey: .backdrop)
         logoUrl = try container.decodeIfPresent(String.self, forKey: .logoUrl)
             ?? container.decodeIfPresent(String.self, forKey: .logoURL)
+            ?? container.decodeIfPresent(String.self, forKey: .logo)
         posterUrl = try container.decodeIfPresent(String.self, forKey: .posterUrl)
             ?? container.decodeIfPresent(String.self, forKey: .posterURL)
+            ?? container.decodeIfPresent(String.self, forKey: .poster)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(backdropUrl, forKey: .backdropUrl)
+        try container.encodeIfPresent(logoUrl, forKey: .logoUrl)
+        try container.encodeIfPresent(posterUrl, forKey: .posterUrl)
     }
 }
 
@@ -300,6 +397,15 @@ struct DoubanComment: Identifiable, Codable, Hashable, Sendable {
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
             ?? container.decodeIfPresent(String.self, forKey: .createdAtSnake)
     }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(username, forKey: .username)
+        try container.encode(content, forKey: .content)
+        try container.encodeIfPresent(rating, forKey: .rating)
+        try container.encodeIfPresent(createdAt, forKey: .createdAt)
+    }
 }
 
 struct DoubanQuickInfo: Codable, Hashable, Sendable {
@@ -308,6 +414,39 @@ struct DoubanQuickInfo: Codable, Hashable, Sendable {
     var summary: String?
     var rating: String?
     var year: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, summary, rating, year, rate
+        case plotSummary = "plot_summary"
+    }
+
+    init(id: String? = nil, title: String? = nil, summary: String? = nil, rating: String? = nil, year: String? = nil) {
+        self.id = id
+        self.title = title
+        self.summary = summary
+        self.rating = rating
+        self.year = year
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try? container.decodeFlexibleString(forKey: .id)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        summary = try container.decodeIfPresent(String.self, forKey: .summary)
+            ?? container.decodeIfPresent(String.self, forKey: .plotSummary)
+        rating = try container.decodeIfPresent(String.self, forKey: .rating)
+            ?? container.decodeIfPresent(String.self, forKey: .rate)
+        year = try container.decodeIfPresent(String.self, forKey: .year)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(id, forKey: .id)
+        try container.encodeIfPresent(title, forKey: .title)
+        try container.encodeIfPresent(summary, forKey: .summary)
+        try container.encodeIfPresent(rating, forKey: .rating)
+        try container.encodeIfPresent(year, forKey: .year)
+    }
 }
 
 struct DoubanSuggestItem: Identifiable, Codable, Hashable, Sendable {
@@ -344,6 +483,12 @@ struct TrailerRefreshResult: Codable, Hashable, Sendable {
         trailerUrl = try container.decodeIfPresent(String.self, forKey: .trailerUrl)
             ?? container.decodeIfPresent(String.self, forKey: .trailerURL)
         message = try container.decodeIfPresent(String.self, forKey: .message)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(trailerUrl, forKey: .trailerUrl)
+        try container.encodeIfPresent(message, forKey: .message)
     }
 }
 
