@@ -36,6 +36,8 @@ public sealed partial class MainWindow : Window
     private DetailPage _detailPage = null!;
     private PlayerPage _playerPage = null!;
     private ShortDramaPage _shortDramaPage = null!;
+    private VideoPlatformPage _bilibiliPage = null!;
+    private VideoPlatformPage _youtubePage = null!;
 
     public HomeViewModel Home { get; }
     public LoginViewModel Login { get; }
@@ -81,6 +83,8 @@ public sealed partial class MainWindow : Window
         _detailPage = new DetailPage();
         _playerPage = new PlayerPage();
         _shortDramaPage = new ShortDramaPage();
+        _bilibiliPage = new VideoPlatformPage();
+        _youtubePage = new VideoPlatformPage();
         _playerPage.Bind(_playerViewModel);
         _playerPage.CloseRequested += OnPlayerCloseRequested;
         _playerPage.SaveRecordRequested += OnPlayerSaveRecordAsync;
@@ -133,6 +137,8 @@ public sealed partial class MainWindow : Window
         _navigationView.MenuItems.Add(NavItem("动漫", "anime", Symbol.AllApps));
         _navigationView.MenuItems.Add(NavItem("综艺", "shows", Symbol.Play));
         _navigationView.MenuItems.Add(NavItem("Short Drama", "shortdrama", Symbol.Video));
+        _navigationView.MenuItems.Add(NavItem("Bilibili", "bilibili", Symbol.Video));
+        _navigationView.MenuItems.Add(NavItem("YouTube", "youtube", Symbol.Video));
         _navigationView.MenuItems.Add(NavItem("直播", "live", Symbol.Camera));
         _navigationView.MenuItems.Add(new NavigationViewItemSeparator());
         _navigationView.MenuItems.Add(NavItem("登录", "login", Symbol.Contact));
@@ -306,6 +312,12 @@ public sealed partial class MainWindow : Window
             case "shortdrama":
                 await ShowShortDramaAsync();
                 break;
+            case "bilibili":
+                await ShowVideoPlatformAsync(VideoPlatformKind.Bilibili);
+                break;
+            case "youtube":
+                await ShowVideoPlatformAsync(VideoPlatformKind.YouTube);
+                break;
             default:
                 _contentHost!.Content = UiHelpers.PageHeader(PageTitle(page), "这个模块还在迁移中。");
                 break;
@@ -326,6 +338,25 @@ public sealed partial class MainWindow : Window
         await vm.LoadInitialAsync();
         _shortDramaPage.Build(vm);
         _contentHost!.Content = _shortDramaPage;
+    }
+
+    private async Task ShowVideoPlatformAsync(VideoPlatformKind kind)
+    {
+        if (Login.Session is null || string.IsNullOrWhiteSpace(Login.Session.ServerUrl))
+        {
+            _contentHost!.Content = UiHelpers.EmptyState("Server session required", "Sign in to a LunaTV server to browse this source.");
+            return;
+        }
+
+        var vm = new VideoPlatformViewModel(
+            new VideoPlatformClient(Login.Session.ServerUrl, Login.Session.Cookie),
+            kind);
+        var page = kind == VideoPlatformKind.YouTube ? _youtubePage : _bilibiliPage;
+        page.PlayRequested -= OnPlayEpisodeAsync;
+        page.PlayRequested += OnPlayEpisodeAsync;
+        await vm.LoadInitialAsync();
+        page.Build(vm);
+        _contentHost!.Content = page;
     }
 
     private async Task ShowLiveAsync(IContentProvider? provider)
@@ -474,6 +505,8 @@ public sealed partial class MainWindow : Window
         "anime" => "动漫",
         "shows" => "综艺",
         "shortdrama" => "Short Drama",
+        "bilibili" => "Bilibili",
+        "youtube" => "YouTube",
         "live" => "直播",
         "login" => "登录",
         "favorites" => "收藏",
