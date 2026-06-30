@@ -147,3 +147,5 @@ $RECYCLE.BIN/
 *.temp
 *.bak
 *.backup
+
+.worktrees/
