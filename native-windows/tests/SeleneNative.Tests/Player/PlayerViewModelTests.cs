@@ -42,6 +42,36 @@ public sealed class PlayerViewModelTests
     }
 
     [Fact]
+    public void SeekTo_ShouldClampAndUpdatePlayerPosition()
+    {
+        var player = new FakeMediaPlayer { LengthSeconds = 120 };
+        var vm = new PlayerViewModel(() => player);
+        vm.ReplaceItem("https://example.com/video.m3u8", NewResult("Test", "src1"), 0);
+        player.SimulateState(MediaPlaybackState.Playing);
+
+        vm.SeekTo(180);
+
+        Assert.Equal(120, player.Position, 1);
+        Assert.Equal(120, vm.PlayTime, 1);
+        Assert.Equal(120, vm.TotalTime, 1);
+    }
+
+    [Fact]
+    public void PositionChanged_ShouldRefreshTotalTime_WhenLengthArrivesLate()
+    {
+        var player = new FakeMediaPlayer();
+        var vm = new PlayerViewModel(() => player);
+        vm.ReplaceItem("https://example.com/video.m3u8", NewResult("Test", "src1"), 0);
+        player.SimulateState(MediaPlaybackState.Playing);
+
+        player.LengthSeconds = 120;
+        player.SimulatePosition(42);
+
+        Assert.Equal(42, vm.PlayTime, 1);
+        Assert.Equal(120, vm.TotalTime, 1);
+    }
+
+    [Fact]
     public void Retry_ShouldReloadAndPlay()
     {
         var player = new FakeMediaPlayer();
@@ -110,6 +140,118 @@ public sealed class PlayerViewModelTests
     }
 
     [Fact]
+    public async Task LoadDetailAndPlayAsync_ShouldPreserveEpisodeOrder_WhenUrlsContainQualityMarkers()
+    {
+        var vm = new PlayerViewModel(() => new FakeMediaPlayer());
+        var provider = new CapturingContentProvider
+        {
+            DetailResult = new SearchResult
+            {
+                Id = "video-1",
+                Title = "Video",
+                Source = "source-a",
+                SourceName = "Source A",
+                Episodes =
+                [
+                    "https://example.com/video-1/ep1-480.m3u8",
+                    "https://example.com/video-1/ep2-2160.m3u8"
+                ],
+            }
+        };
+        var record = new PlayRecord
+        {
+            Id = "source-a+video-1",
+            Source = "source-a",
+            Title = "Video",
+            SourceName = "Source A",
+            EpisodeNumber = 1,
+            SearchTitle = "Video"
+        };
+
+        await vm.LoadDetailAndPlayAsync(record, provider);
+
+        Assert.Equal(0, vm.CurrentEpisodeIndex);
+        Assert.Equal("https://example.com/video-1/ep1-480.m3u8", vm.CurrentEpisodeUrl);
+    }
+
+    [Fact]
+    public async Task LoadDetailAndPlayAsync_ShouldNotPlayDifferentSearchResult_WhenOriginalRecordIsMissing()
+    {
+        var vm = new PlayerViewModel(() => new FakeMediaPlayer());
+        var provider = new CapturingContentProvider
+        {
+            DetailResult = null,
+            SearchResults =
+            [
+                new SearchResult
+                {
+                    Id = "other-video",
+                    Title = "Super Girl",
+                    Source = "other-source",
+                    SourceName = "Other Source",
+                    Episodes = ["https://example.com/other/ep1.m3u8"],
+                }
+            ]
+        };
+        var record = new PlayRecord
+        {
+            Id = "source-a+cang-yuan-tu",
+            Source = "source-a",
+            Title = "沧元图",
+            SourceName = "Source A",
+            EpisodeNumber = 1,
+            SearchTitle = "沧元图"
+        };
+
+        await vm.LoadDetailAndPlayAsync(record, provider);
+
+        Assert.Null(vm.CurrentResult);
+        Assert.Null(vm.CurrentEpisodeUrl);
+        Assert.NotNull(vm.PlaybackError);
+    }
+
+    [Fact]
+    public async Task LoadDetailAndPlayAsync_ShouldPlaySameTitleSearchResult_WhenStoredSourceIdNoLongerMatches()
+    {
+        var vm = new PlayerViewModel(() => new FakeMediaPlayer());
+        var provider = new CapturingContentProvider
+        {
+            DetailResult = null,
+            SearchResults =
+            [
+                new SearchResult
+                {
+                    Id = "new-cang-yuan-tu",
+                    Title = "沧元图",
+                    Source = "new-source",
+                    SourceName = "TV-360资源",
+                    Episodes =
+                    [
+                        "https://example.com/cang/ep1.m3u8",
+                        "https://example.com/cang/ep2.m3u8"
+                    ],
+                }
+            ]
+        };
+        var record = new PlayRecord
+        {
+            Id = "old-source+old-cang-yuan-tu",
+            Source = "old-source",
+            Title = "沧元图",
+            SourceName = "TV-360资源",
+            EpisodeNumber = 2,
+            SearchTitle = "沧元图"
+        };
+
+        await vm.LoadDetailAndPlayAsync(record, provider);
+
+        Assert.Equal("沧元图", vm.CurrentResult?.Title);
+        Assert.Equal(1, vm.CurrentEpisodeIndex);
+        Assert.Equal("https://example.com/cang/ep2.m3u8", vm.CurrentEpisodeUrl);
+        Assert.Null(vm.PlaybackError);
+    }
+
+    [Fact]
     public void ToggleEpisodeOrder_ShouldFlip()
     {
         var vm = new PlayerViewModel(() => new FakeMediaPlayer());
@@ -167,6 +309,8 @@ public sealed class PlayerViewModelTests
     {
         public string? RequestedSource { get; private set; }
         public string? RequestedId { get; private set; }
+        public SearchResult? DetailResult { get; init; }
+        public IReadOnlyList<SearchResult> SearchResults { get; init; } = [];
 
         public Task<LoginSession> LoginAsync(
             string username,
@@ -180,7 +324,7 @@ public sealed class PlayerViewModelTests
             string query,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<IReadOnlyList<SearchResult>>([]);
+            return Task.FromResult(SearchResults);
         }
 
         public Task<SearchResult?> DetailAsync(
@@ -190,6 +334,11 @@ public sealed class PlayerViewModelTests
         {
             RequestedSource = source;
             RequestedId = id;
+            if (DetailResult is not null || SearchResults.Count > 0)
+            {
+                return Task.FromResult(DetailResult);
+            }
+
             var result = new SearchResult
             {
                 Id = id,

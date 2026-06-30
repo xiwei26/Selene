@@ -90,10 +90,10 @@ public sealed partial class PlayerViewModel : ObservableObject, IDisposable
 
         if (e.State == MediaPlaybackState.Playing)
         {
-            TotalTime = _player.Length;
+            RefreshTotalTime();
             if (PendingSeekTime is int seek)
             {
-                _player.Position = seek;
+                SeekTo(seek);
                 PendingSeekTime = null;
             }
             PlaybackError = null;
@@ -107,6 +107,7 @@ public sealed partial class PlayerViewModel : ObservableObject, IDisposable
     private void OnPositionChanged(object? sender, MediaPositionChangedEventArgs e)
     {
         if (_isInternalReset) return;
+        RefreshTotalTime();
         PlayTime = e.Position;
     }
 
@@ -115,9 +116,28 @@ public sealed partial class PlayerViewModel : ObservableObject, IDisposable
         PlaybackError = e.Message;
     }
 
+    private void RefreshTotalTime()
+    {
+        var length = _player.Length;
+        if (length > 0)
+        {
+            TotalTime = length;
+        }
+    }
+
     public void Play() => _player.Play();
 
     public void Pause() => _player.Pause();
+
+    public void SeekTo(double seconds)
+    {
+        RefreshTotalTime();
+        if (TotalTime <= 0) return;
+
+        var target = Math.Clamp(seconds, 0, TotalTime);
+        _player.Position = target;
+        PlayTime = target;
+    }
 
     public void Stop()
     {
@@ -158,9 +178,8 @@ public sealed partial class PlayerViewModel : ObservableObject, IDisposable
     {
         if (CurrentResult is null) return;
         CurrentSource = source;
-        var urls = M3U8Service.SortedByLikelyQuality(source.Episodes);
-        if (CurrentEpisodeIndex < 0 || CurrentEpisodeIndex >= urls.Count) return;
-        ReplaceItem(urls[CurrentEpisodeIndex], source, CurrentEpisodeIndex);
+        if (!TryGetEpisodeUrl(source, CurrentEpisodeIndex, out var url)) return;
+        ReplaceItem(url, source, CurrentEpisodeIndex);
         Play();
     }
 
@@ -168,10 +187,9 @@ public sealed partial class PlayerViewModel : ObservableObject, IDisposable
     {
         var source = CurrentSource ?? CurrentResult;
         if (source is null) return;
-        var urls = M3U8Service.SortedByLikelyQuality(source.Episodes);
-        if (index < 0 || index >= urls.Count) return;
+        if (!TryGetEpisodeUrl(source, index, out var url)) return;
         CurrentEpisodeIndex = index;
-        ReplaceItem(urls[index], source, index);
+        ReplaceItem(url, source, index);
         Play();
     }
 
@@ -221,19 +239,9 @@ public sealed partial class PlayerViewModel : ObservableObject, IDisposable
             if (detail is not null)
             {
                 CurrentSourceResults = [detail];
-                var urls = M3U8Service.SortedByLikelyQuality(detail.Episodes);
                 var index = record.EpisodeNumber - 1;
-                if (index >= 0 && index < urls.Count)
+                if (TryPlayResultAtIndex(detail, index, record))
                 {
-                    CurrentResult = detail;
-                    CurrentSource = detail;
-                    CurrentEpisodeIndex = index;
-                    ReplaceItem(urls[index], detail, index);
-                    if (record.PlayTime > 0)
-                    {
-                        PendingSeekTime = (int)record.PlayTime;
-                    }
-                    Play();
                     return;
                 }
             }
@@ -246,44 +254,89 @@ public sealed partial class PlayerViewModel : ObservableObject, IDisposable
             if (matched is not null)
             {
                 CurrentSourceResults = [matched];
-                var urls = M3U8Service.SortedByLikelyQuality(matched.Episodes);
                 var index = record.EpisodeNumber - 1;
-                if (index >= 0 && index < urls.Count)
+                if (TryPlayResultAtIndex(matched, index, record))
                 {
-                    CurrentResult = matched;
-                    CurrentSource = matched;
-                    CurrentEpisodeIndex = index;
-                    ReplaceItem(urls[index], matched, index);
-                    if (record.PlayTime > 0)
-                    {
-                        PendingSeekTime = (int)record.PlayTime;
-                    }
-                    Play();
                     return;
                 }
             }
 
-            // Step 3: fallback to first search hit with episodes
-            var fallback = results.FirstOrDefault(r => r.Episodes.Count > 0);
-            if (fallback is not null)
+            var titleMatched = FindSameTitleCandidate(results, record);
+            if (titleMatched is not null)
             {
-                CurrentSourceResults = [fallback];
-                var urls = M3U8Service.SortedByLikelyQuality(fallback.Episodes);
-                CurrentResult = fallback;
-                CurrentSource = fallback;
-                CurrentEpisodeIndex = 0;
-                ReplaceItem(urls[0], fallback, 0);
-                Play();
+                CurrentSourceResults = [titleMatched];
+                var index = record.EpisodeNumber - 1;
+                if (TryPlayResultAtIndex(titleMatched, index, record))
+                {
+                    return;
+                }
             }
-            else
-            {
-                PlaybackError = "未找到可播放的源";
-            }
+
+            PlaybackError = "未找到匹配的视频源";
         }
         catch (Exception ex)
         {
             PlaybackError = ex.Message;
         }
+    }
+
+    private static SearchResult? FindSameTitleCandidate(IEnumerable<SearchResult> results, PlayRecord record)
+    {
+        var candidates = results
+            .Where(result => result.Episodes.Count > 0 && TitleMatchesRecord(result.Title, record))
+            .ToList();
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        return candidates.FirstOrDefault(result =>
+                SameText(result.Source, record.Source) ||
+                SameText(result.SourceName, record.SourceName))
+            ?? candidates[0];
+    }
+
+    private static bool TitleMatchesRecord(string title, PlayRecord record)
+    {
+        return SameText(title, record.SearchTitle) || SameText(title, record.Title);
+    }
+
+    private static bool SameText(string left, string right)
+    {
+        return !string.IsNullOrWhiteSpace(left) &&
+            !string.IsNullOrWhiteSpace(right) &&
+            string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool TryPlayResultAtIndex(SearchResult result, int index, PlayRecord record)
+    {
+        if (!TryGetEpisodeUrl(result, index, out var url))
+        {
+            return false;
+        }
+
+        CurrentResult = result;
+        CurrentSource = result;
+        CurrentEpisodeIndex = index;
+        ReplaceItem(url, result, index);
+        if (record.PlayTime > 0)
+        {
+            PendingSeekTime = (int)record.PlayTime;
+        }
+        Play();
+        return true;
+    }
+
+    private static bool TryGetEpisodeUrl(SearchResult result, int index, out string url)
+    {
+        url = string.Empty;
+        if (index < 0 || index >= result.Episodes.Count)
+        {
+            return false;
+        }
+
+        url = result.Episodes[index];
+        return !string.IsNullOrWhiteSpace(url);
     }
 
     public void Dispose()

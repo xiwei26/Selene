@@ -22,3 +22,8 @@ After modifying native client code, rebuild/repackage the affected native app
 before handing the work back. For native Windows changes, run the Windows
 packaging flow after tests pass so `native-windows/publish/win-x64` reflects the
 latest source.
+
+For every new feature or code fix, also produce an installable Windows `.exe`
+package before handing the work back, and report the installer path in the final
+response. Do not stop at loose build output or the publish directory when an
+installer can be built.
