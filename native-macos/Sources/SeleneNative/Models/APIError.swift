@@ -11,7 +11,15 @@ enum APIError: LocalizedError {
     case noResults
     case unknown
 
+    var errorDescription: String? {
+        messageText
+    }
+
     var localizedDescription: String {
+        messageText
+    }
+
+    private var messageText: String {
         switch self {
         case .message(let msg):
             return msg

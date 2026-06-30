@@ -13,6 +13,10 @@ struct PlayRecord: Identifiable, Codable, Hashable {
     var totalTime: Int
     var saveTime: Int64
     var searchTitle: String
+    var originalEpisodes: Int? = nil
+    var remarks: String? = nil
+    var doubanID: Int? = nil
+    var type: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, source, title, year, cover, index
@@ -22,6 +26,9 @@ struct PlayRecord: Identifiable, Codable, Hashable {
         case totalTime = "total_time"
         case saveTime = "save_time"
         case searchTitle = "search_title"
+        case originalEpisodes = "original_episodes"
+        case remarks, type
+        case doubanID = "douban_id"
     }
 
     var itemId: String {
@@ -67,12 +74,16 @@ struct PlayRecord: Identifiable, Codable, Hashable {
             playTime: intValue(data["play_time"] ?? data["playTime"]) ?? 0,
             totalTime: intValue(data["total_time"] ?? data["totalTime"]) ?? 0,
             saveTime: int64Value(data["save_time"] ?? data["saveTime"]) ?? Int64(Date().timeIntervalSince1970 * 1000),
-            searchTitle: data["search_title"] as? String ?? data["searchTitle"] as? String ?? ""
+            searchTitle: data["search_title"] as? String ?? data["searchTitle"] as? String ?? "",
+            originalEpisodes: intValue(data["original_episodes"] ?? data["originalEpisodes"]),
+            remarks: data["remarks"] as? String,
+            doubanID: intValue(data["douban_id"] ?? data["doubanID"]),
+            type: data["type"] as? String
         )
     }
 
     func toJson() -> [String: Any] {
-        [
+        var json: [String: Any] = [
             "title": title,
             "source_name": sourceName,
             "year": year,
@@ -84,6 +95,11 @@ struct PlayRecord: Identifiable, Codable, Hashable {
             "save_time": saveTime,
             "search_title": searchTitle
         ]
+        json["original_episodes"] = originalEpisodes ?? totalEpisodes
+        json["remarks"] = remarks
+        json["douban_id"] = doubanID
+        json["type"] = type
+        return json
     }
 
     private static func formatSeconds(_ seconds: Int) -> String {

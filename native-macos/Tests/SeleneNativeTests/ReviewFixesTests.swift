@@ -48,6 +48,128 @@ final class ReviewFixesTests: XCTestCase {
         XCTAssertNil(progress.error)
     }
 
+    func testSSEParsesLunaTVDataTypeEvents() {
+        let event = SSESearchClient.parseEvent(lines: [
+            #"data: {"type":"source_result","sourceName":"站点","results":[]}"#
+        ])
+
+        XCTAssertEqual(event?.type, "sourceResult")
+        XCTAssertEqual(event?.data["sourceName"] as? String, "站点")
+    }
+
+    func testServerAPIClientDecodesLunaTVLiveDataEnvelope() async throws {
+        RequestCaptureURLProtocol.handler = { request in
+            let payload: String
+            if request.url?.path == "/api/live/sources" {
+                payload = #"{"success":true,"data":[{"key":"live","name":"直播","url":"https://example.com/live.m3u","disabled":false}]}"#
+            } else {
+                payload = #"{"success":true,"data":[{"id":"1","tvgId":"cctv1","name":"CCTV-1","logo":"logo.png","group":"央视","url":"https://example.com/1.m3u8"}]}"#
+            }
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, payload.data(using: .utf8)!)
+        }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RequestCaptureURLProtocol.self]
+        let client = ServerAPIClient(
+            baseURL: URL(string: "https://example.com")!,
+            session: URLSession(configuration: configuration)
+        )
+
+        let sources = try await client.getLiveSources()
+        XCTAssertEqual(sources.first?.key, "live")
+        XCTAssertEqual(sources.first?.ua, "")
+
+        let channels = try await client.getLiveChannels(sourceKey: "live")
+        XCTAssertEqual(channels.first?.tvgId, "cctv1")
+        XCTAssertFalse(channels.first?.isFavorite ?? true)
+    }
+
+    func testServerAPIClientDecodesLunaTVEPGEnvelope() async throws {
+        RequestCaptureURLProtocol.handler = { request in
+            let payload = #"{"success":true,"data":{"tvgId":"cctv1","source":"live","epgUrl":"https://example.com/epg.xml","programs":[{"start":"20240614080000 +0800","end":"20240614090000 +0800","title":"新闻"}]}}"#
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, payload.data(using: .utf8)!)
+        }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RequestCaptureURLProtocol.self]
+        let client = ServerAPIClient(
+            baseURL: URL(string: "https://example.com")!,
+            session: URLSession(configuration: configuration)
+        )
+
+        let epg = try await client.getLiveEPG(tvgId: "cctv1", sourceKey: "live")
+        XCTAssertEqual(epg?.tvgId, "cctv1")
+        XCTAssertEqual(epg?.programs.first?.title, "新闻")
+    }
+
+    func testServerAPIClientAddsLunaTVFavoriteDefaults() async throws {
+        RequestCaptureURLProtocol.handler = { request in
+            let body = try XCTUnwrap(Self.requestBodyData(from: request))
+            let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+            let favorite = try XCTUnwrap(json?["favorite"] as? [String: Any])
+            XCTAssertEqual(favorite["origin"] as? String, "vod")
+            XCTAssertEqual(favorite["search_title"] as? String, "影片")
+
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, #"{"success":true}"#.data(using: .utf8)!)
+        }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RequestCaptureURLProtocol.self]
+        let client = ServerAPIClient(
+            baseURL: URL(string: "https://example.com")!,
+            session: URLSession(configuration: configuration)
+        )
+
+        try await client.addFavorite(
+            source: "src",
+            id: "id",
+            data: ["title": "影片", "source_name": "源", "total_episodes": 1]
+        )
+    }
+
+    private static func requestBodyData(from request: URLRequest) -> Data? {
+        if let httpBody = request.httpBody {
+            return httpBody
+        }
+        guard let stream = request.httpBodyStream else {
+            return nil
+        }
+        stream.open()
+        defer { stream.close() }
+
+        var data = Data()
+        let bufferSize = 1024
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { buffer.deallocate() }
+
+        while stream.hasBytesAvailable {
+            let count = stream.read(buffer, maxLength: bufferSize)
+            if count <= 0 {
+                break
+            }
+            data.append(buffer, count: count)
+        }
+        return data
+    }
+
     func testCacheServiceDoesNotCollideSimilarKeys() throws {
         let cache = CacheService(namespace: "ReviewFixesTests-\(UUID().uuidString)")
         defer { cache.clearAll() }

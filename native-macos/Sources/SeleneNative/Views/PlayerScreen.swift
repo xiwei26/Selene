@@ -6,7 +6,6 @@ struct PlayerScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Close button bar
             HStack {
                 Button {
                     onClose()
@@ -17,8 +16,7 @@ struct PlayerScreen: View {
                     }
                 }
                 .buttonStyle(.borderless)
-                .padding(.leading, 16)
-                .padding(.vertical, 10)
+                .help("返回")
 
                 Spacer()
 
@@ -29,13 +27,16 @@ struct PlayerScreen: View {
                 }
 
                 Spacer()
-                // Balance the trailing space so the title stays centered-ish
                 HStack(spacing: 6) { } .frame(width: 60)
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(AppTheme.elevatedSurface)
 
             Divider()
 
             PlayerView(playerStore: playerStore)
         }
+        .appPageBackground()
     }
 }

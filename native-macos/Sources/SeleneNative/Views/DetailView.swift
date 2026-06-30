@@ -8,41 +8,54 @@ struct DetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
                 headerSection
                 descriptionSection
                 episodesSection
                 Spacer()
             }
-            .padding()
+            .padding(AppTheme.pagePadding)
         }
+        .appPageBackground()
     }
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(result.title)
-                .font(.title2)
-                .bold()
+        HStack(alignment: .top, spacing: 16) {
+            posterView
+                .frame(width: 112, height: 156)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radius))
 
-            HStack(spacing: 12) {
-                Text(result.sourceName)
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.secondary.opacity(0.2))
-                    .cornerRadius(4)
+            VStack(alignment: .leading, spacing: 12) {
+                Text(result.title)
+                    .font(.title2.weight(.semibold))
+                    .lineLimit(3)
 
-                Text(result.year)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    if !result.sourceName.isEmpty {
+                        Text(result.sourceName)
+                            .font(.caption.weight(.medium))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(AppTheme.softAccent)
+                            .clipShape(Capsule())
+                    }
 
-                if let typeName = result.typeName, !typeName.isEmpty {
-                    Text(typeName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if !result.year.isEmpty {
+                        Text(result.year)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if let typeName = result.typeName, !typeName.isEmpty {
+                        Text(typeName)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
-                Spacer()
+                Text("\(result.episodes.count) 集")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 if let onToggleFavorite {
                     Button {
@@ -50,32 +63,33 @@ struct DetailView: View {
                     } label: {
                         Label(isFavorited ? "取消收藏" : "收藏", systemImage: isFavorited ? "heart.fill" : "heart")
                     }
-                    .labelStyle(.iconOnly)
                     .help(isFavorited ? "取消收藏" : "收藏")
                 }
             }
+
+            Spacer(minLength: 0)
         }
+        .appSurface()
     }
 
     private var descriptionSection: some View {
         Group {
             if let desc = result.description, !desc.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("简介")
-                        .font(.headline)
+                    AppSectionHeader(title: "简介")
                     Text(desc)
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
                 }
+                .appSurface()
             }
         }
     }
 
     private var episodesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("剧集 (\(result.episodes.count))")
-                .font(.headline)
+            AppSectionHeader(title: "剧集", count: result.episodes.count)
 
             if result.episodes.isEmpty {
                 Text("暂无可播放剧集")
@@ -98,14 +112,44 @@ struct DetailView: View {
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
                                 .frame(maxWidth: .infinity)
-                                .background(.regularMaterial)
-                                .cornerRadius(6)
+                                .background(AppTheme.surface)
+                                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radius))
                         }
                         .buttonStyle(.plain)
                         .help(result.episodes[index])
                     }
                 }
             }
+        }
+        .appSurface()
+    }
+
+    @ViewBuilder
+    private var posterView: some View {
+        if !result.poster.isEmpty, let url = URL(string: result.poster) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .empty:
+                    posterPlaceholder
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                case .failure:
+                    posterPlaceholder
+                @unknown default:
+                    posterPlaceholder
+                }
+            }
+        } else {
+            posterPlaceholder
+        }
+    }
+
+    private var posterPlaceholder: some View {
+        ZStack {
+            AppTheme.surface
+            Image(systemName: "film")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
         }
     }
 }

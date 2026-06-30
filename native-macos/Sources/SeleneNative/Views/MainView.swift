@@ -87,8 +87,10 @@ struct MainView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
-                sidebarButton(.home)
-                sidebarButton(.search)
+                Section {
+                    sidebarButton(.home)
+                    sidebarButton(.search)
+                }
 
                 Section("浏览") {
                     sidebarButton(.movie)
@@ -105,10 +107,20 @@ struct MainView: View {
                 }
             }
             .navigationTitle("Selene")
-            .frame(minWidth: 190)
+            .listStyle(.sidebar)
+            .frame(minWidth: 200)
         } detail: {
             contentView
+                .appPageBackground()
                 .navigationTitle(selection?.title ?? "Selene")
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Label(sessionStore.session?.isLocalMode == true ? "本地模式" : "已连接", systemImage: sessionStore.session?.isLocalMode == true ? "externaldrive" : "checkmark.circle")
+                            .labelStyle(.titleAndIcon)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
         }
         .task(id: sessionStore.session?.id) {
             guard let url = sessionStore.session?.serverURL else { return }
@@ -133,7 +145,14 @@ struct MainView: View {
     }
 
     private func sidebarButton(_ section: NavigationSection) -> some View {
-        Label(section.title, systemImage: section.icon)
+        Label {
+            Text(section.title)
+                .font(.callout)
+        } icon: {
+            Image(systemName: section.icon)
+                .font(.system(size: 14, weight: .medium))
+                .frame(width: 18)
+        }
             .tag(section)
     }
 

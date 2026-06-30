@@ -2,6 +2,60 @@ import XCTest
 @testable import SeleneNative
 
 final class FeatureParityP2Tests: XCTestCase {
+    func testDoubanHotTVShowsUsesTVQueryShape() async throws {
+        RequestCaptureURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.path, "/rexxar/api/v2/subject/recent_hot/tv")
+            let query = try XCTUnwrap(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems)
+            XCTAssertEqual(query.first { $0.name == "category" }?.value, "最近热门")
+            XCTAssertEqual(query.first { $0.name == "type" }?.value, "tv")
+
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, #"{"items":[]}"#.data(using: .utf8)!)
+        }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RequestCaptureURLProtocol.self]
+        let client = DoubanAPIClient(
+            baseURL: URL(string: "https://example.com")!,
+            session: URLSession(configuration: configuration),
+            cache: CacheService(namespace: "FeatureParityP2Tests-\(UUID().uuidString)")
+        )
+
+        _ = try await client.getHotTVShows()
+    }
+
+    func testDoubanHotShowsUsesTVShowQueryShape() async throws {
+        RequestCaptureURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.path, "/rexxar/api/v2/subject/recent_hot/tv")
+            let query = try XCTUnwrap(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems)
+            XCTAssertEqual(query.first { $0.name == "category" }?.value, "show")
+            XCTAssertEqual(query.first { $0.name == "type" }?.value, "show")
+
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, #"{"items":[]}"#.data(using: .utf8)!)
+        }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [RequestCaptureURLProtocol.self]
+        let client = DoubanAPIClient(
+            baseURL: URL(string: "https://example.com")!,
+            session: URLSession(configuration: configuration),
+            cache: CacheService(namespace: "FeatureParityP2Tests-\(UUID().uuidString)")
+        )
+
+        _ = try await client.getHotShows()
+    }
+
     func testDoubanMovieDecodesCardSubtitleYearAndPosterFallback() throws {
         let data = """
         {
@@ -71,6 +125,30 @@ final class FeatureParityP2Tests: XCTestCase {
         XCTAssertEqual(item.nameCn, "甲 <乙>")
         XCTAssertEqual(item.summary, "Line \"one\"")
         XCTAssertEqual(item.images.bestImageUrl, "common.jpg")
+    }
+
+    func testBangumiItemToleratesNullNestedFieldsFromAPI() throws {
+        let data = """
+        {
+          "id": 2,
+          "name": "Null Fields",
+          "images": {"large": null, "common": "common.jpg", "medium": null},
+          "rating": {"total": null, "count": null, "score": null},
+          "collection": {"doing": null, "wish": 3}
+        }
+        """.data(using: .utf8)!
+
+        let item = try JSONDecoder().decode(BangumiItem.self, from: data)
+
+        XCTAssertEqual(item.images.bestImageUrl, "common.jpg")
+        XCTAssertEqual(item.rating.total, 0)
+        XCTAssertEqual(item.collection.wish, 3)
+        XCTAssertEqual(item.collection.doing, 0)
+    }
+
+    func testAPIErrorDescriptionWorksThroughErrorProtocol() {
+        let error: Error = APIError.parseError
+        XCTAssertEqual(error.localizedDescription, "数据解析失败")
     }
 
     func testCacheServiceExpiresEntries() throws {

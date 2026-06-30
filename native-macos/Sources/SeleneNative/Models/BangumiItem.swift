@@ -4,6 +4,19 @@ struct BangumiRating: Codable, Hashable {
     var total: Int
     var count: [String: Int]
     var score: Double
+
+    init(total: Int, count: [String: Int], score: Double) {
+        self.total = total
+        self.count = count
+        self.score = score
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        total = try container.decodeIfPresent(Int.self, forKey: .total) ?? 0
+        count = try container.decodeIfPresent([String: Int].self, forKey: .count) ?? [:]
+        score = try container.decodeIfPresent(Double.self, forKey: .score) ?? 0
+    }
 }
 
 struct BangumiImages: Codable, Hashable {
@@ -15,6 +28,23 @@ struct BangumiImages: Codable, Hashable {
 
     var bestImageUrl: String {
         [large, common, medium, small, grid].first { !$0.isEmpty } ?? ""
+    }
+
+    init(large: String, common: String, medium: String, small: String, grid: String) {
+        self.large = large
+        self.common = common
+        self.medium = medium
+        self.small = small
+        self.grid = grid
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        large = try container.decodeIfPresent(String.self, forKey: .large) ?? ""
+        common = try container.decodeIfPresent(String.self, forKey: .common) ?? ""
+        medium = try container.decodeIfPresent(String.self, forKey: .medium) ?? ""
+        small = try container.decodeIfPresent(String.self, forKey: .small) ?? ""
+        grid = try container.decodeIfPresent(String.self, forKey: .grid) ?? ""
     }
 }
 
@@ -28,6 +58,23 @@ struct BangumiCollection: Codable, Hashable {
     enum CodingKeys: String, CodingKey {
         case doing, dropped, wish, collect
         case onHold = "on_hold"
+    }
+
+    init(doing: Int, onHold: Int, dropped: Int, wish: Int, collect: Int) {
+        self.doing = doing
+        self.onHold = onHold
+        self.dropped = dropped
+        self.wish = wish
+        self.collect = collect
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        doing = try container.decodeIfPresent(Int.self, forKey: .doing) ?? 0
+        onHold = try container.decodeIfPresent(Int.self, forKey: .onHold) ?? 0
+        dropped = try container.decodeIfPresent(Int.self, forKey: .dropped) ?? 0
+        wish = try container.decodeIfPresent(Int.self, forKey: .wish) ?? 0
+        collect = try container.decodeIfPresent(Int.self, forKey: .collect) ?? 0
     }
 }
 

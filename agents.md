@@ -1,13 +1,29 @@
-# Agent Notes
+# Agent Instructions
 
-## Backend
+## Backend Reference
 
-The Selene backend is now based on SzeMeng76/LunaTV:
+The backend used by this project is:
 
+```text
 https://github.com/SzeMeng76/LunaTV
+```
 
-Native clients should prefer the LunaTV server API surface when a user session
-has a server URL. In particular, Douban category data should use:
+When updating API clients, match LunaTV routes and response shapes first. Native
+clients should prefer the LunaTV server API surface when a user session has a
+server URL.
+
+Important native client expectations include:
+
+- Search and detail routes are LunaTV-compatible `/api/search`, `/api/search/ws`,
+  `/api/detail`, and `/api/search/resources`.
+- Live TV routes may return `{ "success": true, "data": ... }`; native clients
+  should support that envelope.
+- LunaTV SSE search events put the event type in JSON data, for example
+  `{"type":"source_result"}`.
+- Douban category requests should follow the Flutter/LunaTV-compatible query
+  shapes already used in `lib/services/douban_service.dart`.
+
+In particular, Douban category data should use:
 
 - `/api/douban/categories?kind=movie&category=\u70ed\u95e8&type=\u5168\u90e8`
 - `/api/douban/categories?kind=tv&category=tv&type=tv`
@@ -18,12 +34,38 @@ Do not assume the old direct Douban mobile endpoints are the primary backend.
 
 ## Packaging After Changes
 
-After modifying native client code, rebuild/repackage the affected native app
-before handing the work back. For native Windows changes, run the Windows
-packaging flow after tests pass so `native-windows/publish/win-x64` reflects the
-latest source.
+After every native client modification, rebuild and repackage the affected
+native app before finishing the task. Do not revert or discard unrelated
+working-tree changes while packaging.
+
+For native Windows changes, run the Windows packaging flow after tests pass so
+`native-windows/publish/win-x64` reflects the latest source.
 
 For every new feature or code fix, also produce an installable Windows `.exe`
 package before handing the work back, and report the installer path in the final
 response. Do not stop at loose build output or the publish directory when an
 installer can be built.
+
+For native macOS changes, use the existing package-only script from the
+repository root:
+
+```sh
+env PACKAGE_ONLY=true native-macos/script/build_and_run.sh
+```
+
+This rebuilds the Swift release binary and recreates:
+
+```text
+native-macos/SeleneNative.app
+```
+
+After packaging, verify the app bundle exists and was freshly generated. A
+concise check is:
+
+```sh
+ls -la native-macos/SeleneNative.app native-macos/SeleneNative.app/Contents native-macos/SeleneNative.app/Contents/MacOS native-macos/SeleneNative.app/Contents/Resources
+plutil -p native-macos/SeleneNative.app/Contents/Info.plist
+file native-macos/SeleneNative.app/Contents/MacOS/SeleneNative
+```
+
+Do not launch the app unless the user explicitly asks.

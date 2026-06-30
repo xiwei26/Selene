@@ -25,47 +25,56 @@ struct CategoryView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
 
-    private let columns = [GridItem(.adaptive(minimum: 240, maximum: 320), spacing: 12)]
+    private let columns = [GridItem(.adaptive(minimum: 280, maximum: 360), spacing: 12)]
 
     var body: some View {
         ScrollView {
-            if isLoading {
-                ProgressView("加载\(category.title)...")
-                    .padding()
-            }
+            LazyVStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
+                AppPageHeader(
+                    title: category.title,
+                    subtitle: category == .anime ? "今日番组与热门动画" : "热门条目和评分信息",
+                    systemImage: category.icon
+                )
 
-            if let errorMessage {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .padding(.horizontal)
-            }
+                if isLoading {
+                    ProgressView("加载\(category.title)...")
+                        .appSurface()
+                }
 
-            LazyVGrid(columns: columns, spacing: 12) {
-                if category == .anime {
-                    ForEach(bangumiItems) { item in
-                        VideoCardView(
-                            title: item.nameCn?.isEmpty == false ? item.nameCn! : item.name,
-                            poster: item.images.bestImageUrl,
-                            sourceName: "Bangumi",
-                            year: item.airDate,
-                            subtitle: item.rating.score > 0 ? "评分 \(String(format: "%.1f", item.rating.score))" : nil
-                        )
-                    }
-                } else {
-                    ForEach(movies) { movie in
-                        VideoCardView(
-                            title: movie.title,
-                            poster: movie.poster,
-                            sourceName: "Douban",
-                            year: movie.year,
-                            subtitle: movie.rate.map { "评分 \($0)" }
-                        )
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .appSurface()
+                }
+
+                LazyVGrid(columns: columns, spacing: 12) {
+                    if category == .anime {
+                        ForEach(bangumiItems) { item in
+                            VideoCardView(
+                                title: item.nameCn?.isEmpty == false ? item.nameCn! : item.name,
+                                poster: item.images.bestImageUrl,
+                                sourceName: "Bangumi",
+                                year: item.airDate,
+                                subtitle: item.rating.score > 0 ? "评分 \(String(format: "%.1f", item.rating.score))" : nil
+                            )
+                        }
+                    } else {
+                        ForEach(movies) { movie in
+                            VideoCardView(
+                                title: movie.title,
+                                poster: movie.poster,
+                                sourceName: "Douban",
+                                year: movie.year,
+                                subtitle: movie.rate.map { "评分 \($0)" }
+                            )
+                        }
                     }
                 }
             }
-            .padding()
+            .padding(AppTheme.pagePadding)
         }
+        .appPageBackground()
         .task {
             await load()
         }
@@ -92,6 +101,17 @@ struct CategoryView: View {
             }
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private extension DiscoveryCategory {
+    var icon: String {
+        switch self {
+        case .movie: return "film"
+        case .tv: return "tv"
+        case .anime: return "sparkles.tv"
+        case .show: return "theatermasks"
         }
     }
 }

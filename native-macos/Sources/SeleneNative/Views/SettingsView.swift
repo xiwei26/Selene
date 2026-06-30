@@ -10,55 +10,71 @@ struct SettingsView: View {
     @State private var updateError: String?
 
     var body: some View {
-        Form {
-            Section("外观") {
-                Picker("主题", selection: Bindable(themeStore).mode) {
-                    ForEach(ThemeStore.ThemeMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: AppTheme.sectionSpacing) {
+                AppPageHeader(
+                    title: "设置",
+                    subtitle: "账户、外观、更新和缓存。",
+                    systemImage: "gearshape"
+                )
+
+                VStack(alignment: .leading, spacing: 12) {
+                    AppSectionHeader(title: "外观")
+                    Picker("主题", selection: Bindable(themeStore).mode) {
+                        ForEach(ThemeStore.ThemeMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
                     }
                 }
-            }
+                .appSurface()
 
-            Section("账户") {
-                LabeledContent("服务器", value: sessionStore.session?.serverURL.absoluteString ?? "")
-                LabeledContent("用户", value: sessionStore.session?.username ?? "")
-                if sessionStore.session?.isLocalMode == true {
-                    LabeledContent("模式", value: "本地订阅")
-                }
-                Button("退出登录", role: .destructive) {
-                    sessionStore.logout()
-                }
-            }
-
-            Section("更新") {
-                HStack {
-                    Text(updateInfo.map { "发现新版本 \($0.version)" } ?? "当前版本 1.0.0")
-                    Spacer()
-                    Button(isCheckingUpdate ? "检查中..." : "检查更新") {
-                        Task { await checkUpdate() }
+                VStack(alignment: .leading, spacing: 12) {
+                    AppSectionHeader(title: "账户")
+                    LabeledContent("服务器", value: sessionStore.session?.serverURL.absoluteString ?? "")
+                    LabeledContent("用户", value: sessionStore.session?.username ?? "")
+                    if sessionStore.session?.isLocalMode == true {
+                        LabeledContent("模式", value: "本地订阅")
                     }
-                    .disabled(isCheckingUpdate)
+                    Button("退出登录", role: .destructive) {
+                        sessionStore.logout()
+                    }
                 }
-                if let releaseNotes = updateInfo?.releaseNotes {
-                    Text(releaseNotes)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if let updateError {
-                    Text(updateError)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-            }
+                .appSurface()
 
-            Section("缓存") {
-                Button("清理缓存") {
-                    CacheService.shared.clearExpired()
+                VStack(alignment: .leading, spacing: 12) {
+                    AppSectionHeader(title: "更新")
+                    HStack {
+                        Text(updateInfo.map { "发现新版本 \($0.version)" } ?? "当前版本 1.0.0")
+                        Spacer()
+                        Button(isCheckingUpdate ? "检查中..." : "检查更新") {
+                            Task { await checkUpdate() }
+                        }
+                        .disabled(isCheckingUpdate)
+                    }
+                    if let releaseNotes = updateInfo?.releaseNotes {
+                        Text(releaseNotes)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let updateError {
+                        Text(updateError)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
                 }
+                .appSurface()
+
+                VStack(alignment: .leading, spacing: 12) {
+                    AppSectionHeader(title: "缓存")
+                    Button("清理缓存") {
+                        CacheService.shared.clearExpired()
+                    }
+                }
+                .appSurface()
             }
+            .padding(AppTheme.pagePadding)
         }
-        .formStyle(.grouped)
-        .padding()
+        .appPageBackground()
     }
 
     private func checkUpdate() async {
