@@ -54,15 +54,30 @@ public sealed class ShortDramaViewModelTests
     {
         var client = new FakeShortDramaClient
         {
-            ParseResult = new ShortDramaParseResult { ParsedUrl = "https://video.example/1.m3u8" }
+            Detail = new ShortDramaDetail
+            {
+                Id = "s1",
+                Name = "Short One",
+                Episodes =
+                [
+                    new ShortDramaEpisode { Episode = 1, Title = "Episode 1" },
+                    new ShortDramaEpisode { Episode = 2, Title = "Episode 2" }
+                ]
+            },
+            ParseResult = new ShortDramaParseResult { ParsedUrl = "https://video.example/2.m3u8" }
         };
         var vm = new ShortDramaViewModel(client);
         string? playedUrl = null;
         vm.PlayRequested += url => playedUrl = url;
 
-        await vm.PlayEpisodeAsync(new ShortDramaItem { Id = "s1", Name = "Short One" }, episode: 1);
+        var item = new ShortDramaItem { Id = "s1", Name = "Short One" };
+        await vm.LoadDetailAsync(item);
+        vm.SelectedEpisodeNumber = 2;
+        await vm.PlayEpisodeAsync(item);
 
-        Assert.Equal("https://video.example/1.m3u8", playedUrl);
+        Assert.Equal("s1", client.LastDetailId);
+        Assert.Equal(2, client.LastParsedEpisode);
+        Assert.Equal("https://video.example/2.m3u8", playedUrl);
         Assert.Null(vm.ErrorMessage);
     }
 
@@ -87,8 +102,11 @@ public sealed class ShortDramaViewModelTests
         public IReadOnlyList<ShortDramaCategory> Categories { get; init; } = [];
         public ShortDramaListResult Recommended { get; init; } = new();
         public ShortDramaListResult SearchResult { get; init; } = new();
+        public ShortDramaDetail? Detail { get; init; }
         public ShortDramaParseResult? ParseResult { get; init; }
         public string? LastSearchQuery { get; private set; }
+        public string? LastDetailId { get; private set; }
+        public int? LastParsedEpisode { get; private set; }
 
         public Task<IReadOnlyList<ShortDramaCategory>> LoadShortDramaCategoriesAsync(CancellationToken cancellationToken = default)
         {
@@ -113,11 +131,13 @@ public sealed class ShortDramaViewModelTests
 
         public Task<ShortDramaDetail?> LoadDetailAsync(string id, string? name = null, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult<ShortDramaDetail?>(null);
+            LastDetailId = id;
+            return Task.FromResult(Detail);
         }
 
         public Task<ShortDramaParseResult?> ParseAsync(string id, int episode, string? name = null, CancellationToken cancellationToken = default)
         {
+            LastParsedEpisode = episode;
             return Task.FromResult(ParseResult);
         }
     }

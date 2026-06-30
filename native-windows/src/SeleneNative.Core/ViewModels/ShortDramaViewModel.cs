@@ -23,8 +23,15 @@ public sealed partial class ShortDramaViewModel(IShortDramaClient client) : Obse
     [ObservableProperty]
     private string? _errorMessage;
 
+    [ObservableProperty]
+    private ShortDramaDetail? _selectedDetail;
+
+    [ObservableProperty]
+    private int? _selectedEpisodeNumber;
+
     public ObservableCollection<ShortDramaCategory> Categories { get; } = [];
     public ObservableCollection<ShortDramaItem> Items { get; } = [];
+    public ObservableCollection<int> AvailableEpisodeNumbers { get; } = [];
 
     public event Action<string>? PlayRequested;
 
@@ -145,20 +152,77 @@ public sealed partial class ShortDramaViewModel(IShortDramaClient client) : Obse
         }
     }
 
+    public async Task<ShortDramaDetail?> LoadDetailAsync(
+        ShortDramaItem item,
+        CancellationToken cancellationToken = default)
+    {
+        IsLoading = true;
+        ErrorMessage = null;
+        AvailableEpisodeNumbers.Clear();
+        SelectedDetail = null;
+        SelectedEpisodeNumber = null;
+
+        try
+        {
+            var detail = await client.LoadDetailAsync(item.Id, item.Name, cancellationToken).ConfigureAwait(false);
+            SelectedDetail = detail;
+
+            var episodeNumbers = detail?.Episodes
+                .Select(episode => episode.Episode)
+                .Where(episode => episode > 0)
+                .Distinct()
+                .Order()
+                .ToList() ?? [];
+
+            if (episodeNumbers.Count == 0 && item.EpisodeCount is int count && count > 0)
+            {
+                episodeNumbers = Enumerable.Range(1, count).ToList();
+            }
+
+            foreach (var episode in episodeNumbers)
+            {
+                AvailableEpisodeNumbers.Add(episode);
+            }
+
+            SelectedEpisodeNumber = AvailableEpisodeNumbers.FirstOrDefault();
+            if (SelectedEpisodeNumber == 0)
+            {
+                SelectedEpisodeNumber = null;
+            }
+
+            return detail;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            return null;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
     public async Task PlayEpisodeAsync(
         ShortDramaItem item,
-        int episode,
+        int? episode = null,
         CancellationToken cancellationToken = default)
     {
         ErrorMessage = null;
 
         try
         {
-            var parsed = await client.ParseAsync(item.Id, episode, item.Name, cancellationToken).ConfigureAwait(false);
+            var selectedEpisode = episode ?? SelectedEpisodeNumber ?? AvailableEpisodeNumbers.FirstOrDefault();
+            if (selectedEpisode <= 0)
+            {
+                selectedEpisode = 1;
+            }
+
+            var parsed = await client.ParseAsync(item.Id, selectedEpisode, item.Name, cancellationToken).ConfigureAwait(false);
             var url = FirstNonEmpty(parsed?.ParsedUrl, parsed?.ProxyUrl, parsed?.Url);
             if (string.IsNullOrWhiteSpace(url))
             {
-                ErrorMessage = "Short drama playback URL is unavailable.";
+                ErrorMessage = "短剧播放地址不可用";
                 return;
             }
 

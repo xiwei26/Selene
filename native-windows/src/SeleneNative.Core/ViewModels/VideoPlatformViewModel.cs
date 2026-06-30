@@ -49,13 +49,19 @@ public sealed partial class VideoPlatformViewModel(
         {
             if (Kind == VideoPlatformKind.YouTube)
             {
-                Regions.Clear();
-                foreach (var region in await client.LoadYouTubeRegionsAsync(cancellationToken).ConfigureAwait(false))
+                var preferredRegionCode = SelectedRegion?.Code;
+                if (Regions.Count == 0)
                 {
-                    Regions.Add(region);
+                    foreach (var region in await client.LoadYouTubeRegionsAsync(cancellationToken).ConfigureAwait(false))
+                    {
+                        Regions.Add(region);
+                    }
                 }
 
-                SelectedRegion = Regions.FirstOrDefault(region => region.Code == "US") ?? Regions.FirstOrDefault();
+                SelectedRegion = Regions.FirstOrDefault(region => region.Code == preferredRegionCode)
+                    ?? Regions.FirstOrDefault(region => region.Code == "US")
+                    ?? Regions.FirstOrDefault()
+                    ?? SelectedRegion;
                 ReplaceItems(await client.LoadYouTubePopularAsync(SelectedRegion?.Code ?? "US", null, cancellationToken)
                     .ConfigureAwait(false));
             }
@@ -156,7 +162,7 @@ public sealed partial class VideoPlatformViewModel(
     public string? TryGetPlayableUrl(VideoPlatformItem item)
     {
         ErrorMessage = null;
-        foreach (var candidate in new[] { item.PlayableUrl, item.ProxyUrl, item.Url })
+        foreach (var candidate in new[] { item.PlayableUrl, item.ProxyUrl })
         {
             if (Uri.TryCreate(candidate, UriKind.Absolute, out var uri) &&
                 (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
@@ -165,7 +171,7 @@ public sealed partial class VideoPlatformViewModel(
             }
         }
 
-        ErrorMessage = "This item does not currently expose a playable URL.";
+        ErrorMessage = "当前条目暂无可播放地址";
         return null;
     }
 

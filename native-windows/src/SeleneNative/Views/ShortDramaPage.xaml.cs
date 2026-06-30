@@ -144,17 +144,46 @@ public sealed partial class ShortDramaPage : UserControl
         }.Where(value => !string.IsNullOrWhiteSpace(value)));
 
         var row = UiHelpers.Row(item.Name, subtitle);
-        var playButton = new Button { Content = "Play" };
-        playButton.Click += async (_, _) =>
+        var episodesButton = new Button { Content = "Episodes" };
+        episodesButton.Click += async (_, _) =>
         {
             if (_vm is null) return;
 
-            _pendingPlayItem = item;
-            _pendingPlayEpisode = 1;
-            await _vm.PlayEpisodeAsync(item, 1);
+            await _vm.LoadDetailAsync(item);
             Render();
         };
-        row.Children.Add(playButton);
+        row.Children.Add(episodesButton);
+
+        if (_vm?.SelectedDetail?.Id == item.Id && _vm.AvailableEpisodeNumbers.Count > 0)
+        {
+            var episodeBox = new ComboBox
+            {
+                ItemsSource = _vm.AvailableEpisodeNumbers,
+                SelectedItem = _vm.SelectedEpisodeNumber,
+                MinWidth = 120
+            };
+            episodeBox.SelectionChanged += (_, _) =>
+            {
+                if (episodeBox.SelectedItem is int episode)
+                {
+                    _vm.SelectedEpisodeNumber = episode;
+                }
+            };
+            row.Children.Add(episodeBox);
+
+            var playButton = new Button { Content = "Play" };
+            playButton.Click += async (_, _) =>
+            {
+                if (_vm is null) return;
+
+                _pendingPlayItem = item;
+                _pendingPlayEpisode = _vm.SelectedEpisodeNumber ?? _vm.AvailableEpisodeNumbers.First();
+                await _vm.PlayEpisodeAsync(item);
+                Render();
+            };
+            row.Children.Add(playButton);
+        }
+
         return row;
     }
 }

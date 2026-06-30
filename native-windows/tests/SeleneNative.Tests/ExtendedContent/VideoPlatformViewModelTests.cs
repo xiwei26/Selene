@@ -52,7 +52,22 @@ public sealed class VideoPlatformViewModelTests
 
         var url = vm.TryGetPlayableUrl(new VideoPlatformItem
         {
-            PlayableUrl = "ftp://invalid",
+            PlayableUrl = "https://video.example/play.m3u8",
+            ProxyUrl = "https://video.example/proxy.m3u8",
+            Url = "https://video.example/page"
+        });
+
+        Assert.Equal("https://video.example/play.m3u8", url);
+        Assert.Null(vm.ErrorMessage);
+    }
+
+    [Fact]
+    public void TryGetPlayableUrl_ReturnsProxyUrlWhenPlayableUrlIsMissing()
+    {
+        var vm = new VideoPlatformViewModel(new FakeVideoPlatformClient(), VideoPlatformKind.Bilibili);
+
+        var url = vm.TryGetPlayableUrl(new VideoPlatformItem
+        {
             ProxyUrl = "https://video.example/proxy.m3u8",
             Url = "https://video.example/page"
         });
@@ -62,14 +77,39 @@ public sealed class VideoPlatformViewModelTests
     }
 
     [Fact]
-    public void TryGetPlayableUrl_WhenNoHttpUrl_SetsError()
+    public void TryGetPlayableUrl_WhenOnlyPageUrlExists_SetsUnavailableError()
     {
         var vm = new VideoPlatformViewModel(new FakeVideoPlatformClient(), VideoPlatformKind.YouTube);
 
-        var url = vm.TryGetPlayableUrl(new VideoPlatformItem { Url = "yt1" });
+        var url = vm.TryGetPlayableUrl(new VideoPlatformItem { Url = "https://youtube.com/watch?v=yt1" });
 
         Assert.Null(url);
-        Assert.NotNull(vm.ErrorMessage);
+        Assert.Equal("当前条目暂无可播放地址", vm.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task LoadInitialAsync_WithSelectedYouTubeRegion_LoadsPopularForSelectedRegion()
+    {
+        var client = new FakeVideoPlatformClient
+        {
+            Regions =
+            [
+                new YouTubeRegion { Code = "US", Name = "United States" },
+                new YouTubeRegion { Code = "JP", Name = "Japan" }
+            ],
+            YouTubePopular = new VideoPlatformPage
+            {
+                Items = [new VideoPlatformItem { Id = "yt1", Title = "Trending" }]
+            }
+        };
+        var vm = new VideoPlatformViewModel(client, VideoPlatformKind.YouTube);
+
+        await vm.LoadInitialAsync();
+        vm.SelectedRegion = vm.Regions.Single(region => region.Code == "JP");
+        await vm.LoadInitialAsync();
+
+        Assert.Equal("JP", vm.SelectedRegion?.Code);
+        Assert.Equal("JP", client.LastYouTubePopularRegion);
     }
 
     private sealed class FakeVideoPlatformClient : IVideoPlatformClient
@@ -77,6 +117,7 @@ public sealed class VideoPlatformViewModelTests
         public VideoPlatformPage BilibiliPopular { get; init; } = new();
         public VideoPlatformPage YouTubePopular { get; init; } = new();
         public IReadOnlyList<YouTubeRegion> Regions { get; init; } = [];
+        public string? LastYouTubePopularRegion { get; private set; }
 
         public Task<VideoPlatformPage> LoadBilibiliPopularAsync(int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
         {
@@ -90,6 +131,7 @@ public sealed class VideoPlatformViewModelTests
 
         public Task<VideoPlatformPage> LoadYouTubePopularAsync(string regionCode = "US", string? pageToken = null, CancellationToken cancellationToken = default)
         {
+            LastYouTubePopularRegion = regionCode;
             return Task.FromResult(YouTubePopular);
         }
 
