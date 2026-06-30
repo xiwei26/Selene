@@ -35,6 +35,7 @@ public sealed partial class MainWindow : Window
     private CategoryPage _categoryPage = null!;
     private DetailPage _detailPage = null!;
     private PlayerPage _playerPage = null!;
+    private ShortDramaPage _shortDramaPage = null!;
 
     public HomeViewModel Home { get; }
     public LoginViewModel Login { get; }
@@ -79,6 +80,7 @@ public sealed partial class MainWindow : Window
         _categoryPage = new CategoryPage();
         _detailPage = new DetailPage();
         _playerPage = new PlayerPage();
+        _shortDramaPage = new ShortDramaPage();
         _playerPage.Bind(_playerViewModel);
         _playerPage.CloseRequested += OnPlayerCloseRequested;
         _playerPage.SaveRecordRequested += OnPlayerSaveRecordAsync;
@@ -130,6 +132,7 @@ public sealed partial class MainWindow : Window
         _navigationView.MenuItems.Add(NavItem("电视剧", "tv", Symbol.List));
         _navigationView.MenuItems.Add(NavItem("动漫", "anime", Symbol.AllApps));
         _navigationView.MenuItems.Add(NavItem("综艺", "shows", Symbol.Play));
+        _navigationView.MenuItems.Add(NavItem("Short Drama", "shortdrama", Symbol.Video));
         _navigationView.MenuItems.Add(NavItem("直播", "live", Symbol.Camera));
         _navigationView.MenuItems.Add(new NavigationViewItemSeparator());
         _navigationView.MenuItems.Add(NavItem("登录", "login", Symbol.Contact));
@@ -300,10 +303,29 @@ public sealed partial class MainWindow : Window
                 _categoryPage.Build(_categoryViewModel, _doubanClient, _bangumiClient);
                 _contentHost!.Content = _categoryPage;
                 break;
+            case "shortdrama":
+                await ShowShortDramaAsync();
+                break;
             default:
                 _contentHost!.Content = UiHelpers.PageHeader(PageTitle(page), "这个模块还在迁移中。");
                 break;
         }
+    }
+
+    private async Task ShowShortDramaAsync()
+    {
+        if (Login.Session is null || string.IsNullOrWhiteSpace(Login.Session.ServerUrl))
+        {
+            _contentHost!.Content = UiHelpers.EmptyState("Server session required", "Sign in to a LunaTV server to browse short dramas.");
+            return;
+        }
+
+        var vm = new ShortDramaViewModel(new ShortDramaClient(Login.Session.ServerUrl, Login.Session.Cookie));
+        _shortDramaPage.PlayRequested -= OnPlayEpisodeAsync;
+        _shortDramaPage.PlayRequested += OnPlayEpisodeAsync;
+        await vm.LoadInitialAsync();
+        _shortDramaPage.Build(vm);
+        _contentHost!.Content = _shortDramaPage;
     }
 
     private async Task ShowLiveAsync(IContentProvider? provider)
@@ -451,6 +473,7 @@ public sealed partial class MainWindow : Window
         "tv" => "电视剧",
         "anime" => "动漫",
         "shows" => "综艺",
+        "shortdrama" => "Short Drama",
         "live" => "直播",
         "login" => "登录",
         "favorites" => "收藏",
