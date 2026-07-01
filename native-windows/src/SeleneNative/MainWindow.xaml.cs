@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.System;
 using Windows.UI;
 using System.Linq;
 using SeleneNative.Core.Models;
@@ -36,6 +37,7 @@ public sealed partial class MainWindow : Window
     private CategoryPage _categoryPage = null!;
     private DetailPage _detailPage = null!;
     private PlayerPage _playerPage = null!;
+    private AdminPage _adminPage = null!;
 
     public HomeViewModel Home { get; }
     public LoginViewModel Login { get; }
@@ -44,6 +46,7 @@ public sealed partial class MainWindow : Window
     public HistoryViewModel History { get; }
     public LiveViewModel Live { get; }
     public SettingsViewModel Settings { get; }
+    public AdminViewModel Admin { get; }
 
     public MainWindow(IServiceProvider services)
     {
@@ -55,6 +58,7 @@ public sealed partial class MainWindow : Window
         History = _services.GetRequiredService<HistoryViewModel>();
         Live = _services.GetRequiredService<LiveViewModel>();
         Settings = _services.GetRequiredService<SettingsViewModel>();
+        Admin = _services.GetRequiredService<AdminViewModel>();
         _playerViewModel = _services.GetRequiredService<PlayerViewModel>();
         _detailViewModel = _services.GetRequiredService<DetailViewModel>();
         _categoryViewModel = _services.GetRequiredService<CategoryViewModel>();
@@ -81,6 +85,7 @@ public sealed partial class MainWindow : Window
         _categoryPage = new CategoryPage();
         _detailPage = new DetailPage();
         _playerPage = new PlayerPage();
+        _adminPage = new AdminPage();
         _playerPage.Bind(_playerViewModel);
         _playerPage.CloseRequested += OnPlayerCloseRequested;
         _playerPage.SaveRecordRequested += OnPlayerSaveRecordAsync;
@@ -145,6 +150,7 @@ public sealed partial class MainWindow : Window
         _navigationView.MenuItems.Add(NavItem("短剧", "shortdrama", Symbol.Video));
         _navigationView.MenuItems.Add(NavItem("Bilibili", "bilibili", Symbol.World));
         _navigationView.MenuItems.Add(NavItem("YouTube", "youtube", Symbol.World));
+        _navigationView.MenuItems.Add(NavItem("管理后台", "admin", Symbol.Admin));
         _navigationView.MenuItems.Add(new NavigationViewItemSeparator());
         _navigationView.MenuItems.Add(NavItem("登录", "login", Symbol.Contact));
         _navigationView.MenuItems.Add(NavItem("收藏", "favorites", Symbol.Favorite));
@@ -288,7 +294,7 @@ public sealed partial class MainWindow : Window
                 _contentHost!.Content = _historyPage;
                 break;
             case "settings":
-                _settingsPage.Build(Settings);
+                _settingsPage.Build(Settings, Login.Session?.ServerUrl);
                 _contentHost!.Content = _settingsPage;
                 break;
             case "shortdrama":
@@ -296,6 +302,10 @@ public sealed partial class MainWindow : Window
             case "youtube":
                 await _lunaFeaturePage.BuildAsync(page, provider);
                 _contentHost!.Content = _lunaFeaturePage;
+                break;
+            case "admin":
+                await _adminPage.BuildAsync(Admin, provider);
+                _contentHost!.Content = _adminPage;
                 break;
             case "live":
                 await ShowLiveAsync(provider);
@@ -479,6 +489,7 @@ public sealed partial class MainWindow : Window
         "shows" => "综艺",
         "live" => "直播",
         "login" => "登录",
+        "admin" => "管理后台",
         "favorites" => "收藏",
         "history" => "历史",
         "settings" => "设置",

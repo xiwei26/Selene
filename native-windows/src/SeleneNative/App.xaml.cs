@@ -47,6 +47,7 @@ public partial class App : Application
         services.AddSingleton<HistoryViewModel>();
         services.AddSingleton<LiveViewModel>();
         services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<AdminViewModel>();
         services.AddSingleton<PlayerViewModel>();
         services.AddSingleton<DetailViewModel>();
         services.AddSingleton<CategoryViewModel>();

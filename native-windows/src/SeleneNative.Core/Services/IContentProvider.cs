@@ -48,7 +48,7 @@ public interface IContentProvider
         return Task.FromResult<IReadOnlyList<MediaPlatformItem>>([]);
     }
 
-    Task<IReadOnlyList<MediaPlatformItem>> GetYouTubePopularAsync(CancellationToken cancellationToken = default)
+    Task<IReadOnlyList<MediaPlatformItem>> GetYouTubePopularAsync(string regionCode = "US", CancellationToken cancellationToken = default)
     {
         return Task.FromResult<IReadOnlyList<MediaPlatformItem>>([]);
     }
@@ -76,5 +76,22 @@ public interface IContentProvider
     Task<IReadOnlyList<DoubanRecommendation>> GetDoubanRecommendationsAsync(string doubanId, CancellationToken cancellationToken = default)
     {
         return Task.FromResult<IReadOnlyList<DoubanRecommendation>>([]);
+    }
+
+    // Admin APIs — only available with admin/owner session
+
+    Task<AdminConfig?> GetAdminConfigAsync(CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<AdminConfig?>(null);
+    }
+
+    Task SaveYouTubeConfigAsync(YouTubeAdminConfig config, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
+
+    Task SaveBilibiliConfigAsync(bool enabled, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
     }
 }
