@@ -28,7 +28,7 @@ public partial class App : Application
         var services = new ServiceCollection();
 
         // Media engine
-        services.AddLibVlcMediaPlayer();
+        services.AddWindowsMediaPlayer();
 
         // Persistence / caching
         services.AddSingleton<ISessionStore>(_ => new SessionStore());

@@ -2,8 +2,8 @@ namespace SeleneNative.Core.Services;
 
 /// <summary>
 /// Abstraction over a media engine so the Core project can stay platform-agnostic
-/// and unit-testable. The WinUI host binds a LibVLCSharp implementation; tests
-/// provide a fake.
+/// and unit-testable. Native hosts bind platform-specific implementations;
+/// tests provide a fake.
 /// </summary>
 public interface IMediaPlayer : IDisposable
 {

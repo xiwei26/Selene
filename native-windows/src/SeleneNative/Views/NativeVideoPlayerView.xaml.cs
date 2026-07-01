@@ -1,22 +1,19 @@
-using LibVLCSharp.Shared;
 using SeleneNative.Core.Services;
 using SeleneNative.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Windows.Foundation;
+using Microsoft.UI.Xaml.Media;
 
 namespace SeleneNative.Views;
 
 /// <summary>
-/// In-app video surface. Constructs a <see cref="VideoView"/> element programmatically
-/// to work around a WinUI XAML compiler issue where <c>LibVLCSharp.WinUI</c> isn't
-/// discovered. Attaches it to the backing <see cref="IMediaPlayer"/> on property change
-/// and detaches + pauses on <see cref="Unloaded"/>.
+/// In-app video surface. Hosts the Windows built-in player through a
+/// <see cref="MediaPlayerElement"/> while keeping the Core layer behind
+/// <see cref="IMediaPlayer"/>.
 /// </summary>
 public sealed partial class NativeVideoPlayerView : UserControl
 {
-    private LibVLCSharp.Platforms.Windows.VideoView? _videoView;
-    private IReadOnlyList<string>? _swapChainOptions;
+    private MediaPlayerElement? _playerElement;
     private TaskCompletionSource _readySource =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -41,19 +38,22 @@ public sealed partial class NativeVideoPlayerView : UserControl
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (_videoView is not null)
+        if (_playerElement is not null)
         {
             Attach();
             return;
         }
 
-        _videoView = new LibVLCSharp.Platforms.Windows.VideoView
+        _playerElement = new MediaPlayerElement
         {
+            AreTransportControlsEnabled = false,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Stretch,
+            Stretch = Stretch.Uniform,
         };
-        _videoView.Initialized += OnVideoViewInitialized;
-        VideoHost.Children.Insert(0, _videoView);
+        VideoHost.Children.Insert(0, _playerElement);
+        _readySource.TrySetResult();
+        Attach();
     }
 
     public Task WaitUntilReadyAsync() => _readySource.Task;
@@ -68,30 +68,18 @@ public sealed partial class NativeVideoPlayerView : UserControl
 
     private void Attach()
     {
-        if (_videoView is null ||
-            Player is null ||
-            _swapChainOptions is null ||
-            !_readySource.Task.IsCompleted)
+        if (_playerElement is null || Player is null)
         {
             return;
         }
 
-        if (Player is LibVlcMediaPlayer libVlc)
+        if (Player is WindowsMediaPlayer windowsMediaPlayer)
         {
-            libVlc.InitializeVideoView(_videoView, _swapChainOptions);
+            windowsMediaPlayer.AttachTo(_playerElement);
         }
 
         Player.StateChanged -= OnPlayerStateChanged;
         Player.StateChanged += OnPlayerStateChanged;
-    }
-
-    private void OnVideoViewInitialized(
-        object? sender,
-        LibVLCSharp.Platforms.Windows.InitializedEventArgs e)
-    {
-        _swapChainOptions = e.SwapChainOptions;
-        _readySource.TrySetResult();
-        Attach();
     }
 
     private void OnPlayerStateChanged(object? sender, Core.Services.MediaStateChangedEventArgs e)
@@ -107,9 +95,9 @@ public sealed partial class NativeVideoPlayerView : UserControl
         if (Player is not null)
         {
             Player.StateChanged -= OnPlayerStateChanged;
-            if (Player is LibVlcMediaPlayer libVlc && _videoView is not null)
+            if (Player is WindowsMediaPlayer windowsMediaPlayer && _playerElement is not null)
             {
-                libVlc.DetachFromView(_videoView);
+                windowsMediaPlayer.DetachFrom(_playerElement);
             }
 
             try { Player.Pause(); } catch { /* ignore */ }
