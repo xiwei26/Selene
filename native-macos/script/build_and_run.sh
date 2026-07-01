@@ -90,6 +90,54 @@ fi
 echo "App bundle created at: $APP_BUNDLE"
 
 if [[ "${PACKAGE_ONLY:-}" == "true" ]]; then
+    # --- DMG packaging ---
+    APP_VERSION="1.1.0"
+    ARCH="$(uname -m)"
+    DIST_DIR="$NATIVE_DIR/dist"
+    DMG_NAME="Selene-${APP_VERSION}-macos.dmg"
+    DMG_PATH="$DIST_DIR/$DMG_NAME"
+
+    mkdir -p "$DIST_DIR"
+    rm -f "$DMG_PATH"
+
+    if command -v create-dmg >/dev/null 2>&1; then
+        echo "Creating styled DMG with create-dmg..."
+
+        CREATE_DMG_ARGS=(
+            --volname "Selene"
+            --app-drop-link 600 180
+            --icon "SeleneNative.app" 180 180
+            --window-size 800 450
+            --hide-extension "SeleneNative.app"
+        )
+
+        BG_FILE="$NATIVE_DIR/assets/selene-bg.png"
+        if [[ -f "$BG_FILE" ]]; then
+            CREATE_DMG_ARGS+=(--background "$BG_FILE")
+            echo "Using DMG background: $BG_FILE"
+        fi
+
+        create-dmg "${CREATE_DMG_ARGS[@]}" "$DMG_PATH" "$APP_BUNDLE"
+    else
+        echo "WARNING: create-dmg not found. Falling back to plain hdiutil DMG."
+        echo "Install create-dmg for a styled DMG: brew install create-dmg"
+
+        TMP_DMG=$(mktemp -d)
+        cp -R "$APP_BUNDLE" "$TMP_DMG/SeleneNative.app"
+        ln -s /Applications "$TMP_DMG/Applications"
+        hdiutil create -volname "Selene" -srcfolder "$TMP_DMG" \
+            -ov -format UDZO "$DMG_PATH"
+        rm -rf "$TMP_DMG"
+    fi
+
+    if [[ -f "$DMG_PATH" ]]; then
+        echo "DMG created at: $DMG_PATH"
+        ls -lh "$DMG_PATH"
+    else
+        echo "ERROR: Failed to create DMG at $DMG_PATH"
+        exit 1
+    fi
+
     exit 0
 fi
 
