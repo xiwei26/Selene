@@ -53,19 +53,23 @@ repository root:
 env PACKAGE_ONLY=true native-macos/script/build_and_run.sh
 ```
 
-This rebuilds the Swift release binary and recreates:
+This rebuilds the Swift release binary, recreates the `.app` bundle, and
+produces an installable DMG:
 
 ```text
-native-macos/SeleneNative.app
+native-macos/dist/Selene-1.1.0-macos.dmg
 ```
 
-After packaging, verify the app bundle exists and was freshly generated. A
-concise check is:
+After packaging, verify both the app bundle and DMG exist and were freshly
+generated. A concise check is:
 
 ```sh
 ls -la native-macos/SeleneNative.app native-macos/SeleneNative.app/Contents native-macos/SeleneNative.app/Contents/MacOS native-macos/SeleneNative.app/Contents/Resources
 plutil -p native-macos/SeleneNative.app/Contents/Info.plist
 file native-macos/SeleneNative.app/Contents/MacOS/SeleneNative
+ls -lh native-macos/dist/Selene-1.1.0-macos.dmg
 ```
 
-Do not launch the app unless the user explicitly asks.
+Report the DMG path in the final response. Do not stop at the `.app` bundle
+when a DMG can be built. Do not launch the app unless the user explicitly
+asks.
