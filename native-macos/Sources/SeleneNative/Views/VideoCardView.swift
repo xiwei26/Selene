@@ -83,7 +83,7 @@ struct VideoCardView: View {
                 case .empty:
                     placeholder
                 case .success(let image):
-                    image.resizable().scaledToFill()
+                    image.resizable().scaledToFit()
                 case .failure:
                     placeholder
                 @unknown default:

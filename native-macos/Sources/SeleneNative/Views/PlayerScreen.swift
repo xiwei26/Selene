@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PlayerScreen: View {
     @Bindable var playerStore: PlayerStore
+    let provider: ContentProvider?
     let onClose: () -> Void
 
     var body: some View {
@@ -10,10 +11,7 @@ struct PlayerScreen: View {
                 Button {
                     onClose()
                 } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left")
-                        Text("返回")
-                    }
+                    Label("返回", systemImage: "chevron.left")
                 }
                 .buttonStyle(.borderless)
                 .help("返回")
@@ -30,12 +28,12 @@ struct PlayerScreen: View {
                 HStack(spacing: 6) { } .frame(width: 60)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.vertical, 8)
             .background(AppTheme.elevatedSurface)
 
             Divider()
 
-            PlayerView(playerStore: playerStore)
+            PlayerView(playerStore: playerStore, provider: provider)
         }
         .appPageBackground()
     }

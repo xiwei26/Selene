@@ -3,6 +3,7 @@ import Foundation
 enum APIError: LocalizedError {
     case message(String)
     case responseError(statusCode: Int)
+    case featureDisabled(String, statusCode: Int?)
     case invalidURL
     case unauthorized
     case networkTimeout
@@ -25,6 +26,8 @@ enum APIError: LocalizedError {
             return msg
         case .responseError(let code):
             return "请求失败 (\(code))"
+        case .featureDisabled(let msg, _):
+            return msg
         case .invalidURL:
             return "服务器地址无效"
         case .unauthorized:
@@ -40,5 +43,12 @@ enum APIError: LocalizedError {
         case .unknown:
             return "未知错误"
         }
+    }
+
+    var isFeatureDisabled: Bool {
+        if case .featureDisabled = self {
+            return true
+        }
+        return false
     }
 }

@@ -2,7 +2,7 @@ import SwiftUI
 
 struct MainView: View {
     private enum NavigationSection: String, CaseIterable, Identifiable {
-        case home, search, movie, tv, anime, show, live, favorites, history, settings
+        case home, search, movie, tv, anime, show, live, shortDrama, bilibili, youtube, favorites, history, admin, settings
 
         var id: String { rawValue }
 
@@ -15,8 +15,12 @@ struct MainView: View {
             case .anime: return "动漫"
             case .show: return "综艺"
             case .live: return "直播"
+            case .shortDrama: return "短剧"
+            case .bilibili: return "Bilibili"
+            case .youtube: return "YouTube"
             case .favorites: return "收藏"
             case .history: return "历史"
+            case .admin: return "管理后台"
             case .settings: return "设置"
             }
         }
@@ -30,8 +34,12 @@ struct MainView: View {
             case .anime: return "sparkles.tv"
             case .show: return "theatermasks"
             case .live: return "dot.radiowaves.left.and.right"
+            case .shortDrama: return "play.square.stack"
+            case .bilibili: return "tv"
+            case .youtube: return "play.rectangle"
             case .favorites: return "heart"
             case .history: return "clock"
+            case .admin: return "gearshape.2"
             case .settings: return "gearshape"
             }
         }
@@ -98,11 +106,15 @@ struct MainView: View {
                     sidebarButton(.anime)
                     sidebarButton(.show)
                     sidebarButton(.live)
+                    sidebarButton(.shortDrama)
+                    sidebarButton(.bilibili)
+                    sidebarButton(.youtube)
                 }
 
                 Section("个人") {
                     sidebarButton(.favorites)
                     sidebarButton(.history)
+                    sidebarButton(.admin)
                     sidebarButton(.settings)
                 }
             }
@@ -112,15 +124,18 @@ struct MainView: View {
         } detail: {
             contentView
                 .appPageBackground()
-                .navigationTitle(selection?.title ?? "Selene")
+                .navigationTitle(isPlaying ? "" : selection?.title ?? "Selene")
                 .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        Label(sessionStore.session?.isLocalMode == true ? "本地模式" : "已连接", systemImage: sessionStore.session?.isLocalMode == true ? "externaldrive" : "checkmark.circle")
-                            .labelStyle(.titleAndIcon)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    if !isPlaying {
+                        ToolbarItem(placement: .primaryAction) {
+                            Label(sessionStore.session?.isLocalMode == true ? "本地模式" : "已连接", systemImage: sessionStore.session?.isLocalMode == true ? "externaldrive" : "checkmark.circle")
+                                .labelStyle(.titleAndIcon)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
+                .toolbar(isPlaying ? .hidden : .visible, for: .windowToolbar)
         }
         .task(id: sessionStore.session?.id) {
             guard let url = sessionStore.session?.serverURL else { return }
@@ -161,6 +176,7 @@ struct MainView: View {
         if isPlaying {
             PlayerScreen(
                 playerStore: playerStore,
+                provider: provider,
                 onClose: closePlayer
             )
         } else {
@@ -191,6 +207,12 @@ struct MainView: View {
                 CategoryView(category: .show, doubanProvider: doubanProvider, bangumiProvider: bangumiProvider)
             case .live:
                 LiveScreenView(liveStore: liveStore, provider: liveProvider)
+            case .shortDrama:
+                lunaFeatureView(.shortDrama)
+            case .bilibili:
+                lunaFeatureView(.bilibili)
+            case .youtube:
+                lunaFeatureView(.youtube)
             case .favorites:
                 FavoritesView(
                     favoritesStore: favoritesStore,
@@ -203,12 +225,34 @@ struct MainView: View {
                     provider: provider,
                     onPlayRecord: playRecord
                 )
+            case .admin:
+                if sessionStore.session == nil || sessionStore.session?.isLocalMode == true {
+                    ContentUnavailableView("请先连接服务器", systemImage: "person.crop.circle.badge.exclamationmark", description: Text("管理后台需要 LunaTV 服务器会话"))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    AdminView(provider: provider)
+                }
             case .settings:
                 SettingsView(
                     sessionStore: sessionStore,
                     themeStore: themeStore,
                     versionService: VersionService()
                 )
+            }
+        }
+    }
+
+    private func lunaFeatureView(_ kind: LunaFeatureView.Kind) -> some View {
+        Group {
+            if sessionStore.session == nil || sessionStore.session?.isLocalMode == true {
+                ContentUnavailableView("请先连接服务器", systemImage: kind.icon, description: Text("登录后才能使用 LunaTV 后端的平台功能"))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                LunaFeatureView(kind: kind, provider: provider) { detail in
+                    searchStore.selectedResult = detail
+                    searchStore.results = [detail]
+                    selection = .search
+                }
             }
         }
     }

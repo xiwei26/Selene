@@ -4,6 +4,11 @@ final class ServerAPIClient: ContentProvider, Sendable {
     let baseURL: URL
     private let cookie: String
     private let session: URLSession
+    private static let decoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .useDefaultKeys
+        return decoder
+    }()
 
     init(baseURL: URL, cookie: String = "", session: URLSession = .shared) {
         self.baseURL = baseURL
@@ -275,6 +280,158 @@ final class ServerAPIClient: ContentProvider, Sendable {
         return try JSONDecoder().decode(EpgData.self, from: data)
     }
 
+    func getRecommendedShortDramas() async throws -> [SearchResult] {
+        let data = try await performDataRequest(
+            path: "/api/shortdrama/recommend",
+            queryItems: [URLQueryItem(name: "size", value: "30")]
+        )
+        return try readShortDramaList(from: data)
+    }
+
+    func searchShortDramas(query: String) async throws -> [SearchResult] {
+        let data = try await performDataRequest(
+            path: "/api/shortdrama/search",
+            queryItems: [URLQueryItem(name: "q", value: query)]
+        )
+        return try readShortDramaList(from: data)
+    }
+
+    func getShortDramaDetail(id: String, name: String? = nil) async throws -> SearchResult? {
+        var items = [
+            URLQueryItem(name: "id", value: id),
+            URLQueryItem(name: "episode", value: "1")
+        ]
+        if let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            items.append(URLQueryItem(name: "name", value: name))
+        }
+        let data = try await performDataRequest(path: "/api/shortdrama/detail", queryItems: items)
+        guard !data.isEmpty else { return nil }
+        return try Self.decoder.decode(SearchResult.self, from: data)
+    }
+
+    func getBilibiliPopular() async throws -> [MediaPlatformItem] {
+        let data = try await performDataRequest(path: "/api/bilibili/popular")
+        return try readPlatformItems(from: data, source: "bilibili")
+    }
+
+    func searchBilibili(query: String) async throws -> [MediaPlatformItem] {
+        let data = try await performDataRequest(
+            path: "/api/bilibili/search",
+            queryItems: [URLQueryItem(name: "q", value: query)]
+        )
+        return try readPlatformItems(from: data, source: "bilibili")
+    }
+
+    func getYouTubePopular(regionCode: String = "US") async throws -> [MediaPlatformItem] {
+        let data = try await performDataRequest(
+            path: "/api/youtube/popular",
+            queryItems: [URLQueryItem(name: "regionCode", value: regionCode)]
+        )
+        return try readPlatformItems(from: data, source: "youtube")
+    }
+
+    func searchYouTube(query: String) async throws -> [MediaPlatformItem] {
+        let data = try await performDataRequest(
+            path: "/api/youtube/search",
+            queryItems: [URLQueryItem(name: "q", value: query)]
+        )
+        return try readPlatformItems(from: data, source: "youtube")
+    }
+
+    func getTMDBBackdrop(title: String, year: String? = nil, type: String? = nil) async throws -> TMDBBackdrop? {
+        var items = [URLQueryItem(name: "title", value: title)]
+        if let year, !year.isEmpty {
+            items.append(URLQueryItem(name: "year", value: year))
+        }
+        if let type, !type.isEmpty {
+            items.append(URLQueryItem(name: "stype", value: type))
+        }
+        let data = try await performDataRequest(path: "/api/tmdb/backdrop", queryItems: items)
+        let object = try jsonObject(from: data)
+        let root = unwrapObject(object)
+        guard JSONSerialization.isValidJSONObject(root) else { return nil }
+        let payload = try JSONSerialization.data(withJSONObject: root)
+        return try Self.decoder.decode(TMDBBackdrop.self, from: payload)
+    }
+
+    func getDoubanQuickInfo(title: String) async throws -> DoubanQuickInfo? {
+        let data = try await performDataRequest(
+            path: "/api/douban/quick-info",
+            queryItems: [URLQueryItem(name: "q", value: title)]
+        )
+        let object = unwrapObject(try jsonObject(from: data))
+        guard let dict = object as? [String: Any] else { return nil }
+        return DoubanQuickInfo(
+            title: readString(dict, keys: ["title", "name"]),
+            year: readOptionalString(dict, keys: ["year"]),
+            rating: readOptionalString(dict, keys: ["rating", "rate", "score"]),
+            summary: readOptionalString(dict, keys: ["summary", "desc", "description"]),
+            genres: readStringArray(dict, keys: ["genres", "genre"]),
+            directors: readStringArray(dict, keys: ["directors", "director"]),
+            cast: readStringArray(dict, keys: ["cast", "actors"])
+        )
+    }
+
+    func getDoubanComments(doubanId: String) async throws -> [DoubanComment] {
+        let data = try await performDataRequest(
+            path: "/api/douban/comments",
+            queryItems: [URLQueryItem(name: "id", value: doubanId)]
+        )
+        return try readWrappedArray(from: data, keys: ["comments", "data", "list"]).compactMap { item in
+            let content = readString(item, keys: ["content", "comment", "text"])
+            guard !content.isEmpty else { return nil }
+            return DoubanComment(
+                author: readString(item, keys: ["author", "name"]),
+                content: content,
+                rating: readString(item, keys: ["rating", "score"])
+            )
+        }
+    }
+
+    func getDoubanRecommendations(doubanId: String) async throws -> [DoubanRecommendation] {
+        let data = try await performDataRequest(
+            path: "/api/douban/recommends",
+            queryItems: [URLQueryItem(name: "id", value: doubanId)]
+        )
+        return try readWrappedArray(from: data, keys: ["recommends", "recommendations", "data", "list"]).compactMap { item in
+            let title = readString(item, keys: ["title", "name"])
+            guard !title.isEmpty else { return nil }
+            return DoubanRecommendation(
+                id: readString(item, keys: ["id", "douban_id"]),
+                title: title,
+                cover: readString(item, keys: ["cover", "poster", "pic"]),
+                rating: readString(item, keys: ["rating", "rate", "score"])
+            )
+        }
+    }
+
+    func getAdminConfig() async throws -> AdminConfig? {
+        let data = try await performDataRequest(path: "/api/admin/config")
+        guard !data.isEmpty else { return nil }
+        let config = try Self.decoder.decode(AdminConfig.self, from: data)
+        return normalizedAdminConfig(config)
+    }
+
+    func saveYouTubeConfig(_ config: YouTubeAdminConfig) async throws {
+        let body: [String: Any] = [
+            "enabled": config.enabled,
+            "apiKey": config.apiKey,
+            "enableDemo": config.enableDemo,
+            "maxResults": config.maxResults,
+            "enabledRegions": config.enabledRegions,
+            "enabledCategories": config.enabledCategories
+        ]
+        _ = try await performDataRequest(path: "/api/admin/youtube", method: "POST", body: body)
+    }
+
+    func saveBilibiliConfig(enabled: Bool) async throws {
+        _ = try await performDataRequest(
+            path: "/api/admin/bilibili",
+            method: "POST",
+            body: ["enabled": enabled]
+        )
+    }
+
     func sseSearchURL(query: String) -> URL? {
         var components = URLComponents(
             url: baseURL.appendingPathComponent("/api/search/ws"),
@@ -319,6 +476,9 @@ final class ServerAPIClient: ContentProvider, Sendable {
             if httpResponse.statusCode == 401 {
                 throw APIError.unauthorized
             }
+            if let disabled = featureDisabledMessage(from: data, statusCode: httpResponse.statusCode) {
+                throw APIError.featureDisabled(disabled, statusCode: httpResponse.statusCode)
+            }
             throw APIError.responseError(statusCode: httpResponse.statusCode)
         }
         return data
@@ -347,6 +507,131 @@ final class ServerAPIClient: ContentProvider, Sendable {
             return nested
         }
         return [:]
+    }
+
+    private func readShortDramaList(from data: Data) throws -> [SearchResult] {
+        if let direct = try? Self.decoder.decode([SearchResult].self, from: data) {
+            return direct
+        }
+        return try readWrappedArray(from: data, keys: ["data", "list", "results", "items"]).compactMap { item in
+            guard JSONSerialization.isValidJSONObject(item) else { return nil }
+            let payload = try JSONSerialization.data(withJSONObject: item)
+            return try? Self.decoder.decode(SearchResult.self, from: payload)
+        }
+    }
+
+    private func readPlatformItems(from data: Data, source: String) throws -> [MediaPlatformItem] {
+        let items = try readWrappedArray(from: data, keys: ["data", "items", "results", "videos"])
+        return items.compactMap { item in
+            let nestedSnippet = item["snippet"] as? [String: Any]
+            let title = readString(item, keys: ["title", "name"])
+                .nonEmpty ?? readString(nestedSnippet ?? [:], keys: ["title"])
+            guard !title.isEmpty else { return nil }
+            return MediaPlatformItem(
+                id: readString(item, keys: ["id", "videoId", "bvid", "aid"]),
+                title: title,
+                cover: readString(item, keys: ["cover", "pic", "thumbnail", "poster"]),
+                author: readString(item, keys: ["author", "owner", "channelTitle", "up"]),
+                description: readString(item, keys: ["description", "desc"]) .nonEmpty ?? readString(nestedSnippet ?? [:], keys: ["description"]),
+                duration: readString(item, keys: ["duration", "length"]),
+                source: readString(item, keys: ["source"]).nonEmpty ?? source,
+                url: readString(item, keys: ["url", "webpage_url", "link"])
+            )
+        }
+    }
+
+    private func readWrappedArray(from data: Data, keys: [String]) throws -> [[String: Any]] {
+        let object = try jsonObject(from: data)
+        if let array = object as? [[String: Any]] {
+            return array
+        }
+        guard let dict = object as? [String: Any] else { return [] }
+        for key in keys {
+            if let array = dict[key] as? [[String: Any]] {
+                return array
+            }
+            if let nested = dict[key] as? [String: Any] {
+                for nestedKey in keys where nestedKey != key {
+                    if let array = nested[nestedKey] as? [[String: Any]] {
+                        return array
+                    }
+                }
+            }
+        }
+        return []
+    }
+
+    private func unwrapObject(_ object: Any) -> Any {
+        guard let dict = object as? [String: Any],
+              let data = dict["data"] else {
+            return object
+        }
+        return data
+    }
+
+    private func normalizedAdminConfig(_ config: AdminConfig) -> AdminConfig {
+        var config = config
+        if var youtube = config.youTubeConfig {
+            if youtube.enabledRegions.isEmpty {
+                youtube.enabledRegions = YouTubeAdminConfig.defaultRegions
+            }
+            if youtube.enabledCategories.isEmpty {
+                youtube.enabledCategories = YouTubeAdminConfig.defaultCategories
+            }
+            config.youTubeConfig = youtube
+        }
+        return config
+    }
+
+    private func readString(_ dict: [String: Any], keys: [String]) -> String {
+        readOptionalString(dict, keys: keys) ?? ""
+    }
+
+    private func readOptionalString(_ dict: [String: Any], keys: [String]) -> String? {
+        for key in keys {
+            if let value = dict[key] as? String, !value.isEmpty {
+                return value
+            }
+            if let value = dict[key] as? NSNumber {
+                return value.stringValue
+            }
+        }
+        return nil
+    }
+
+    private func readStringArray(_ dict: [String: Any], keys: [String]) -> [String] {
+        for key in keys {
+            if let values = dict[key] as? [String] {
+                return values
+            }
+            if let value = dict[key] as? String, !value.isEmpty {
+                return value.split(separator: "/").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            }
+        }
+        return []
+    }
+
+    private func featureDisabledMessage(from data: Data, statusCode: Int) -> String? {
+        let fallback = "功能未启用"
+        guard let object = try? jsonObject(from: data) else {
+            return nil
+        }
+        let message: String?
+        if let dict = object as? [String: Any] {
+            message = readOptionalString(dict, keys: ["message", "error", "msg"])
+        } else {
+            message = nil
+        }
+        guard statusCode == 403 || (message?.contains(fallback) == true) else {
+            return nil
+        }
+        return message ?? fallback
+    }
+}
+
+private extension String {
+    var nonEmpty: String? {
+        isEmpty ? nil : self
     }
 }
 

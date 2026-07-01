@@ -21,6 +21,7 @@ struct SearchResultsView: View {
                 if let result = searchStore.selectedResult {
                     DetailView(
                         result: result,
+                        provider: provider,
                         isFavorited: favoritesStore.isFavorited(source: result.source, id: result.id),
                         onToggleFavorite: { result in
                             Task {
@@ -47,7 +48,7 @@ struct SearchResultsView: View {
 
                 if playerStore.currentEpisodeURL != nil {
                     Divider()
-                    PlayerView(playerStore: playerStore)
+                    PlayerView(playerStore: playerStore, provider: provider)
                         .frame(minHeight: 300)
                 }
             }

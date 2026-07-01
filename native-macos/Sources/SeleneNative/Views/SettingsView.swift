@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct SettingsView: View {
     let sessionStore: SessionStore
@@ -37,6 +38,25 @@ struct SettingsView: View {
                     }
                     Button("退出登录", role: .destructive) {
                         sessionStore.logout()
+                    }
+                }
+                .appSurface()
+
+                VStack(alignment: .leading, spacing: 12) {
+                    AppSectionHeader(title: "LunaTV 平台功能")
+                    if let session = sessionStore.session, !session.isLocalMode {
+                        Text("服务端：\(session.serverURL.absoluteString)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button {
+                            NSWorkspace.shared.open(session.serverURL.appendingPathComponent("admin"))
+                        } label: {
+                            Label("在浏览器中打开管理后台", systemImage: "safari")
+                        }
+                    } else {
+                        Text("请先登录 LunaTV 服务器以查看和管理平台功能状态。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .appSurface()
