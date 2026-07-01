@@ -6,6 +6,7 @@ using SeleneNative.Core.Models;
 using SeleneNative.Core.Services;
 using Windows.System;
 using Windows.UI;
+using MH = Microsoft.UI;
 
 namespace SeleneNative.Views;
 
@@ -44,13 +45,59 @@ public sealed partial class LunaFeaturePage : UserControl
                 var items = await _provider.GetRecommendedShortDramasAsync();
                 RenderShortDramas("推荐短剧", items);
             }
+            else if (kind == "youtube")
+            {
+                var items = await _provider.GetYouTubePopularAsync();
+                RenderPlatformItems("热门 YouTube", items);
+            }
             else
             {
-                var items = kind == "bilibili"
-                    ? await _provider.GetBilibiliPopularAsync()
-                    : await _provider.GetYouTubePopularAsync();
-                RenderPlatformItems(kind == "bilibili" ? "热门 Bilibili" : "热门 YouTube", items);
+                var items = await _provider.GetBilibiliPopularAsync();
+                RenderPlatformItems("热门 Bilibili", items);
             }
+        }
+        catch (ApiException ex) when (ex.FeatureDisabled)
+        {
+            ContentStack.Children.Clear();
+            ContentStack.Children.Add(UiHelpers.PageHeader(PageTitle(kind), PageSubtitle(kind)));
+
+            var disabledPanel = new StackPanel { Spacing = 12, Margin = new Thickness(0, 24, 0, 0) };
+            disabledPanel.Children.Add(new TextBlock
+            {
+                Text = "功能未启用",
+                FontSize = 20,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            });
+            disabledPanel.Children.Add(new TextBlock
+            {
+                Text = $"请在 LunaTV 管理后台开启 {PageTitle(kind)} 功能。{ex.Message}",
+                Foreground = new SolidColorBrush(Color.FromArgb(255, 187, 203, 186)),
+                TextWrapping = TextWrapping.Wrap,
+            });
+
+            // Extract server URL from the provider (ServerApiClient)
+            var serverUrl = _provider is ServerApiClient sapi ? sapi.BaseUrl : (string?)null;
+            if (!string.IsNullOrWhiteSpace(serverUrl))
+            {
+                var adminBtn = new Button
+                {
+                    Content = "打开管理后台",
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    Background = new SolidColorBrush(Color.FromArgb(255, 18, 200, 102)),
+                    Foreground = new SolidColorBrush(MH.Colors.Black),
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Padding = new Thickness(16, 8, 16, 8),
+                    CornerRadius = new CornerRadius(6),
+                };
+                adminBtn.Click += async (_, _) =>
+                {
+                    var adminUri = new Uri($"{serverUrl.TrimEnd('/')}/admin");
+                    await Launcher.LaunchUriAsync(adminUri);
+                };
+                disabledPanel.Children.Add(adminBtn);
+            }
+
+            ContentStack.Children.Add(disabledPanel);
         }
         catch (Exception ex)
         {
@@ -87,12 +134,37 @@ public sealed partial class LunaFeaturePage : UserControl
                 var items = await _provider.SearchShortDramasAsync(_searchBox.Text.Trim());
                 RenderShortDramas("短剧搜索结果", items, keepHeader: true);
             }
+            else if (_kind == "youtube")
+            {
+                var items = await _provider.SearchYouTubeAsync(_searchBox.Text.Trim());
+                RenderPlatformItems("YouTube 搜索结果", items, keepHeader: true);
+            }
             else
             {
-                var items = _kind == "bilibili"
-                    ? await _provider.SearchBilibiliAsync(_searchBox.Text.Trim())
-                    : await _provider.SearchYouTubeAsync(_searchBox.Text.Trim());
-                RenderPlatformItems($"{PageTitle(_kind)} 搜索结果", items, keepHeader: true);
+                var items = await _provider.SearchBilibiliAsync(_searchBox.Text.Trim());
+                RenderPlatformItems("Bilibili 搜索结果", items, keepHeader: true);
+            }
+        }
+        catch (ApiException ex) when (ex.FeatureDisabled)
+        {
+            ContentStack.Children.Add(UiHelpers.InfoBar("功能未启用", $"请在 LunaTV 管理后台开启 {PageTitle(_kind)} 功能。", InfoBarSeverity.Warning));
+
+            var serverUrl = _provider is ServerApiClient sapi ? sapi.BaseUrl : (string?)null;
+            if (!string.IsNullOrWhiteSpace(serverUrl))
+            {
+                var adminBtn = new Button
+                {
+                    Content = "打开管理后台",
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    Background = new SolidColorBrush(Color.FromArgb(255, 18, 200, 102)),
+                    CornerRadius = new CornerRadius(6),
+                };
+                adminBtn.Click += async (_, _) =>
+                {
+                    var adminUri = new Uri($"{serverUrl.TrimEnd('/')}/admin");
+                    await Launcher.LaunchUriAsync(adminUri);
+                };
+                ContentStack.Children.Add(adminBtn);
             }
         }
         catch (Exception ex)

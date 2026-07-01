@@ -15,6 +15,8 @@ public sealed class ServerApiClient : IContentProvider
     private readonly Uri _baseUri;
     private readonly string _cookie;
 
+    public string BaseUrl => _baseUri.ToString().TrimEnd('/');
+
     public ServerApiClient(string baseUrl, string cookie = "", HttpClient? httpClient = null)
     {
         if (string.IsNullOrWhiteSpace(baseUrl))
@@ -435,12 +437,13 @@ public sealed class ServerApiClient : IContentProvider
     }
 
     public async Task<IReadOnlyList<MediaPlatformItem>> GetYouTubePopularAsync(
+        string regionCode = "US",
         CancellationToken cancellationToken = default)
     {
         var data = await SendForJsonAsync(
             HttpMethod.Get,
             "/api/youtube/popular",
-            [],
+            [new KeyValuePair<string, string>("regionCode", regionCode)],
             null,
             "获取 YouTube 热门失败",
             cancellationToken).ConfigureAwait(false);
@@ -565,6 +568,134 @@ public sealed class ServerApiClient : IContentProvider
         }).Where(item => !string.IsNullOrWhiteSpace(item.Title)).ToList();
     }
 
+    public async Task<AdminConfig?> GetAdminConfigAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var data = await SendForJsonAsync(
+            HttpMethod.Get,
+            "/api/admin/config",
+            [],
+            null,
+            "获取管理后台配置失败",
+            cancellationToken).ConfigureAwait(false);
+
+        if (data.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var config = new AdminConfig();
+
+        // Parse Role
+        if (data.TryGetProperty("Role", out var role) && role.ValueKind == JsonValueKind.String)
+        {
+            config.Role = role.GetString();
+        }
+
+        // The actual config may be wrapped in a "Config" property
+        var configRoot = data.TryGetProperty("Config", out var wrapped) && wrapped.ValueKind == JsonValueKind.Object
+            ? wrapped : data;
+
+        // Parse YouTubeConfig
+        if (configRoot.TryGetProperty("YouTubeConfig", out var yt) && yt.ValueKind == JsonValueKind.Object)
+        {
+            config.YouTubeConfig = new YouTubeAdminConfig
+            {
+                Enabled = ReadBool(yt, "enabled"),
+                ApiKey = ReadString(yt, "apiKey"),
+                EnableDemo = ReadBool(yt, "enableDemo", defaultValue: true),
+                MaxResults = ReadInt(yt, "maxResults", defaultValue: 25),
+                EnabledRegions = ReadStringListOrEmpty(yt, "enabledRegions", YouTubeAdminConfig.DefaultRegions),
+                EnabledCategories = ReadStringListOrEmpty(yt, "enabledCategories", YouTubeAdminConfig.DefaultCategories),
+            };
+        }
+
+        // Parse BilibiliConfig
+        if (configRoot.TryGetProperty("BilibiliConfig", out var bili) && bili.ValueKind == JsonValueKind.Object)
+        {
+            config.BilibiliConfig = new BilibiliAdminConfig
+            {
+                Enabled = ReadBool(bili, "enabled"),
+                LoginStatus = ReadString(bili, "loginStatus"),
+            };
+
+            if (bili.TryGetProperty("userInfo", out var ui) && ui.ValueKind == JsonValueKind.Object)
+            {
+                config.BilibiliConfig.UserInfo = new BilibiliAdminUserInfo
+                {
+                    Mid = ReadLong(ui, "mid"),
+                    Username = ReadString(ui, "username"),
+                    Face = ReadString(ui, "face"),
+                    IsVip = ReadBool(ui, "isVip"),
+                };
+            }
+        }
+
+        // Parse ShortDramaConfig
+        if (configRoot.TryGetProperty("ShortDramaConfig", out var sd) && sd.ValueKind == JsonValueKind.Object)
+        {
+            config.ShortDramaConfig = new ShortDramaAdminConfig
+            {
+                PrimaryApiUrl = ReadString(sd, "primaryApiUrl"),
+                AlternativeApiUrl = ReadString(sd, "alternativeApiUrl"),
+                EnableAlternative = ReadBool(sd, "enableAlternative"),
+            };
+        }
+
+        // Parse SiteConfig
+        if (configRoot.TryGetProperty("SiteConfig", out var site) && site.ValueKind == JsonValueKind.Object)
+        {
+            config.SiteConfig = new AdminSiteConfig
+            {
+                SiteName = ReadString(site, "SiteName"),
+                Announcement = ReadString(site, "Announcement"),
+            };
+        }
+
+        return config;
+    }
+
+    public async Task SaveYouTubeConfigAsync(
+        YouTubeAdminConfig youTubeConfig,
+        CancellationToken cancellationToken = default)
+    {
+        var body = new Dictionary<string, object>
+        {
+            ["enabled"] = youTubeConfig.Enabled,
+            ["apiKey"] = youTubeConfig.ApiKey ?? string.Empty,
+            ["enableDemo"] = youTubeConfig.EnableDemo,
+            ["maxResults"] = youTubeConfig.MaxResults,
+            ["enabledRegions"] = youTubeConfig.EnabledRegions ?? [],
+            ["enabledCategories"] = youTubeConfig.EnabledCategories ?? [],
+        };
+
+        await SendForJsonAsync(
+            HttpMethod.Post,
+            "/api/admin/youtube",
+            [],
+            body,
+            "保存 YouTube 配置失败",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task SaveBilibiliConfigAsync(
+        bool enabled,
+        CancellationToken cancellationToken = default)
+    {
+        var body = new Dictionary<string, object>
+        {
+            ["enabled"] = enabled,
+        };
+
+        await SendForJsonAsync(
+            HttpMethod.Post,
+            "/api/admin/bilibili",
+            [],
+            body,
+            "保存 Bilibili 配置失败",
+            cancellationToken).ConfigureAwait(false);
+    }
+
     private static string NormalizeBaseUrl(string baseUrl)
     {
         var trimmed = baseUrl.Trim();
@@ -651,6 +782,15 @@ public sealed class ServerApiClient : IContentProvider
         }
 
         var detail = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+        // Detect feature-disabled responses from the LunaTV backend
+        if (detail.Contains("功能未启用") || detail.Contains("未启用"))
+        {
+            throw ApiException.FeatureDisabledError(
+                string.IsNullOrWhiteSpace(detail) ? defaultMessage : detail,
+                (int)response.StatusCode);
+        }
+
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             throw new ApiException("登录已过期，请重新登录", (int)response.StatusCode);
@@ -741,7 +881,7 @@ public sealed class ServerApiClient : IContentProvider
             return new MediaPlatformItem
             {
                 Id = id,
-                Title = ReadString(item, "title", "name"),
+                Title = FirstNonEmpty(ReadString(item, "title", "name"), ReadString(snippet, "title")),
                 Cover = FirstNonEmpty(ReadString(item, "pic", "cover"), thumbnail),
                 Author = FirstNonEmpty(ReadString(item, "author", "uname"), ReadString(snippet, "channelTitle")),
                 Description = FirstNonEmpty(ReadString(item, "description", "desc"), ReadString(snippet, "description")),
@@ -949,5 +1089,62 @@ public sealed class ServerApiClient : IContentProvider
         {
             return null;
         }
+    }
+
+    private static bool ReadBool(JsonElement element, string propertyName, bool defaultValue = false)
+    {
+        if (element.ValueKind == JsonValueKind.Object &&
+            element.TryGetProperty(propertyName, out var prop) &&
+            (prop.ValueKind == JsonValueKind.True || prop.ValueKind == JsonValueKind.False))
+        {
+            return prop.GetBoolean();
+        }
+
+        return defaultValue;
+    }
+
+    private static int ReadInt(JsonElement element, string propertyName, int defaultValue = 0)
+    {
+        if (element.ValueKind == JsonValueKind.Object &&
+            element.TryGetProperty(propertyName, out var prop) &&
+            prop.ValueKind == JsonValueKind.Number)
+        {
+            return prop.GetInt32();
+        }
+
+        return defaultValue;
+    }
+
+    private static long ReadLong(JsonElement element, string propertyName, long defaultValue = 0)
+    {
+        if (element.ValueKind == JsonValueKind.Object &&
+            element.TryGetProperty(propertyName, out var prop) &&
+            prop.ValueKind == JsonValueKind.Number)
+        {
+            return prop.GetInt64();
+        }
+
+        return defaultValue;
+    }
+
+    private static List<string> ReadStringList(JsonElement element, string propertyName)
+    {
+        if (element.ValueKind == JsonValueKind.Object &&
+            element.TryGetProperty(propertyName, out var prop) &&
+            prop.ValueKind == JsonValueKind.Array)
+        {
+            return prop.EnumerateArray()
+                .Select(item => item.ReadString() ?? string.Empty)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+        }
+
+        return [];
+    }
+
+    private static List<string> ReadStringListOrEmpty(JsonElement element, string propertyName, string[] defaults)
+    {
+        var result = ReadStringList(element, propertyName);
+        return result.Count > 0 ? result : [.. defaults];
     }
 }
