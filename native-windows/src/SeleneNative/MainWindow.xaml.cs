@@ -360,8 +360,10 @@ public sealed partial class MainWindow : Window
 
     private async Task OnPlayEpisodeAsync(SearchResult detail, string episodeTitle, string episodeUrl, int episodeNumber)
     {
+        var provider = Login.CreateProvider();
+        _playerPage.SetProvider(provider);
         _contentHost!.Content = _playerPage;
-        await _playerPage.OpenAsync(detail, episodeTitle, episodeUrl, episodeNumber);
+        await _playerPage.OpenAsync(detail, episodeTitle, episodeUrl, episodeNumber, provider);
     }
 
     private async void OnPlayerCloseRequested(object? sender, EventArgs e)
@@ -420,9 +422,11 @@ public sealed partial class MainWindow : Window
         var provider = Login.CreateProvider();
         if (provider is null) return;
 
+        _playerPage.SetProvider(provider);
         _contentHost!.Content = _playerPage;
         await _playerPage.WaitUntilVideoSurfaceReadyAsync();
         await _playerViewModel.LoadDetailAndPlayAsync(record, provider);
+        await _playerPage.LoadCurrentMetadataAsync();
     }
 
     private async void OnHomeDoubanMovieClicked(DoubanMovie movie, string category)

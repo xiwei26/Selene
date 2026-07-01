@@ -43,6 +43,19 @@ public sealed class LunaFeatureParityTests
         Assert.Contains("Recommendations", source);
     }
 
+    [Fact]
+    public void PlayerPage_ShouldRenderEnhancedMetadataBelowFixedVideo()
+    {
+        var xaml = File.ReadAllText(FindRepoFile("native-windows", "src", "SeleneNative", "Views", "PlayerPage.xaml"));
+        var source = File.ReadAllText(FindRepoFile("native-windows", "src", "SeleneNative", "Views", "PlayerPage.xaml.cs"));
+
+        Assert.Contains("<RowDefinition Height=\"*\" />", xaml);
+        Assert.Contains("VerticalScrollMode=\"Enabled\"", xaml);
+        Assert.Contains("x:Name=\"InfoPanel\"", xaml);
+        Assert.Contains("PlayerMetadataViewModel", source);
+        Assert.Contains("LoadPlayerMetadataAsync", source);
+    }
+
     private static string FindRepoFile(params string[] relativeParts)
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);

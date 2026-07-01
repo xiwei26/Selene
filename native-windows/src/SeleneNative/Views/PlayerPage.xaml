@@ -52,7 +52,14 @@
             VerticalAlignment="Bottom"
             Margin="28,0,28,0" />
 
-        <StackPanel x:Name="ControlPanel" Grid.Row="2" Padding="28,12,28,28" Spacing="12">
+        <ScrollViewer
+            x:Name="BottomScrollViewer"
+            Grid.Row="2"
+            Height="280"
+            VerticalScrollBarVisibility="Auto"
+            VerticalScrollMode="Enabled"
+            HorizontalScrollMode="Disabled">
+        <StackPanel x:Name="ControlPanel" Padding="28,12,28,28" Spacing="12">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -88,6 +95,9 @@
             <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled">
                 <StackPanel x:Name="EpisodesRow" Orientation="Horizontal" Spacing="8" />
             </ScrollViewer>
+
+            <StackPanel x:Name="InfoPanel" Spacing="12" Margin="0,6,0,0" />
         </StackPanel>
+        </ScrollViewer>
     </Grid>
 </UserControl>
