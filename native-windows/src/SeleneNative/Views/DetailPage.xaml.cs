@@ -1,6 +1,8 @@
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.UI;
 using System.Runtime.CompilerServices;
 using SeleneNative.Core.Models;
@@ -47,6 +49,11 @@ public sealed partial class DetailPage : UserControl
         if (_vm?.Result is null) return;
         var result = _vm.Result;
         ContentStack.Children.Clear();
+
+        if (_vm.TmdbBackdrop is not null)
+        {
+            ContentStack.Children.Add(CreateTmdbBackdropHero(result, _vm.TmdbBackdrop));
+        }
 
         // Header
         var headerPanel = new StackPanel { Spacing = 8 };
@@ -112,6 +119,11 @@ public sealed partial class DetailPage : UserControl
             });
         }
 
+        if (_vm.QuickInfo is not null)
+        {
+            ContentStack.Children.Add(CreateQuickInfoPanel(_vm.QuickInfo));
+        }
+
         // Source switcher
         if (_vm.Sources.Count > 1)
         {
@@ -160,5 +172,213 @@ public sealed partial class DetailPage : UserControl
         }
 
         ContentStack.Children.Add(episodeSection);
+
+        if (_vm.Comments.Count > 0)
+        {
+            ContentStack.Children.Add(CreateCommentsPanel(_vm.Comments));
+        }
+
+        if (_vm.Recommendations.Count > 0)
+        {
+            ContentStack.Children.Add(CreateRecommendationsPanel(_vm.Recommendations));
+        }
+    }
+
+    private static UIElement CreateTmdbBackdropHero(SearchResult result, TmdbBackdrop TmdbBackdrop)
+    {
+        var hero = new Grid
+        {
+            Height = 360,
+            CornerRadius = new CornerRadius(10),
+            Background = new SolidColorBrush(Color.FromArgb(255, 12, 12, 12)),
+        };
+
+        var imageUrl = TmdbBackdrop.Backdrop ?? TmdbBackdrop.Poster;
+        if (Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri))
+        {
+            hero.Children.Add(new Image
+            {
+                Source = new BitmapImage(uri),
+                Stretch = Stretch.UniformToFill,
+                Opacity = 0.55,
+            });
+        }
+
+        hero.Children.Add(new Border
+        {
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new Windows.Foundation.Point(0, 0),
+                EndPoint = new Windows.Foundation.Point(0, 1),
+                GradientStops =
+                {
+                    new GradientStop { Color = Color.FromArgb(30, 0, 0, 0), Offset = 0 },
+                    new GradientStop { Color = Color.FromArgb(230, 0, 0, 0), Offset = 1 }
+                }
+            }
+        });
+
+        var stack = new StackPanel
+        {
+            Spacing = 10,
+            Padding = new Thickness(24),
+            VerticalAlignment = VerticalAlignment.Bottom,
+            MaxWidth = 760,
+        };
+
+        if (Uri.TryCreate(TmdbBackdrop.Logo, UriKind.Absolute, out var logoUri))
+        {
+            stack.Children.Add(new Image
+            {
+                Source = new BitmapImage(logoUri),
+                Stretch = Stretch.Uniform,
+                MaxWidth = 260,
+                MaxHeight = 96,
+                HorizontalAlignment = HorizontalAlignment.Left,
+            });
+        }
+        else
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = TmdbBackdrop.Title ?? result.Title,
+                FontSize = 34,
+                FontWeight = Microsoft.UI.Text.FontWeights.Black,
+                Foreground = new SolidColorBrush(Colors.White),
+            });
+        }
+
+        var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        if (TmdbBackdrop.Rating is double rating)
+        {
+            chips.Children.Add(CreateChip($"TMDB {rating:0.0}", Color.FromArgb(255, 245, 197, 24)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(TmdbBackdrop.Year))
+        {
+            chips.Children.Add(CreateChip(TmdbBackdrop.Year!, Color.FromArgb(210, 255, 255, 255)));
+        }
+
+        if (TmdbBackdrop.NumberOfSeasons is int seasons and > 0)
+        {
+            chips.Children.Add(CreateChip($"共 {seasons} 季", Color.FromArgb(255, 18, 200, 102)));
+        }
+
+        stack.Children.Add(chips);
+
+        var overview = TmdbBackdrop.Overview ?? result.Description;
+        if (!string.IsNullOrWhiteSpace(overview))
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = overview,
+                TextWrapping = TextWrapping.Wrap,
+                MaxLines = 4,
+                Foreground = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)),
+            });
+        }
+
+        hero.Children.Add(stack);
+        return hero;
+    }
+
+    private static UIElement CreateQuickInfoPanel(DoubanQuickInfo QuickInfo)
+    {
+        var stack = new StackPanel { Spacing = 8 };
+        stack.Children.Add(new TextBlock
+        {
+            Text = "豆瓣详情",
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+        });
+
+        var lines = new[]
+        {
+            JoinLine("类型", QuickInfo.Genres),
+            JoinLine("导演", QuickInfo.Directors),
+            JoinLine("主演", QuickInfo.Cast),
+            !string.IsNullOrWhiteSpace(QuickInfo.Rating) ? $"豆瓣评分：{QuickInfo.Rating}" : string.Empty,
+            !string.IsNullOrWhiteSpace(QuickInfo.Summary) ? QuickInfo.Summary : string.Empty,
+        }.Where(line => !string.IsNullOrWhiteSpace(line));
+
+        foreach (var line in lines)
+        {
+            stack.Children.Add(new TextBlock { Text = line, TextWrapping = TextWrapping.Wrap, MaxWidth = 980 });
+        }
+
+        return stack;
+    }
+
+    private static UIElement CreateCommentsPanel(IEnumerable<DoubanComment> Comments)
+    {
+        var stack = new StackPanel { Spacing = 8 };
+        stack.Children.Add(new TextBlock
+        {
+            Text = "豆瓣短评",
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+        });
+
+        foreach (var comment in Comments.Take(5))
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(comment.Author)
+                    ? comment.Content
+                    : $"{comment.Author}: {comment.Content}",
+                TextWrapping = TextWrapping.Wrap,
+                MaxWidth = 980,
+                Foreground = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)),
+            });
+        }
+
+        return stack;
+    }
+
+    private static UIElement CreateRecommendationsPanel(IEnumerable<DoubanRecommendation> Recommendations)
+    {
+        var stack = new StackPanel { Spacing = 8 };
+        stack.Children.Add(new TextBlock
+        {
+            Text = "相关推荐",
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+        });
+
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        foreach (var item in Recommendations.Take(8))
+        {
+            row.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(item.Rating) ? item.Title : $"{item.Title}  {item.Rating}",
+                MaxWidth = 160,
+                TextWrapping = TextWrapping.Wrap,
+            });
+        }
+
+        stack.Children.Add(row);
+        return stack;
+    }
+
+    private static Border CreateChip(string text, Color foreground)
+    {
+        return new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(95, 0, 0, 0)),
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(8, 3, 8, 3),
+            Child = new TextBlock
+            {
+                Text = text,
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(foreground),
+            }
+        };
+    }
+
+    private static string JoinLine(string label, IReadOnlyList<string> values)
+    {
+        return values.Count > 0 ? $"{label}：{string.Join("、", values)}" : string.Empty;
     }
 }

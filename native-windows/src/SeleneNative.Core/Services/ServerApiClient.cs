@@ -348,6 +348,223 @@ public sealed class ServerApiClient : IContentProvider
         return data.ValueKind == JsonValueKind.Object ? data.Deserialize<EpgData>(JsonOptions) : null;
     }
 
+    public async Task<IReadOnlyList<SearchResult>> GetRecommendedShortDramasAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var data = await SendForJsonAsync(
+            HttpMethod.Get,
+            "/api/shortdrama/recommend",
+            [new KeyValuePair<string, string>("size", "30")],
+            null,
+            "获取短剧推荐失败",
+            cancellationToken).ConfigureAwait(false);
+
+        return ReadShortDramaList(data);
+    }
+
+    public async Task<IReadOnlyList<SearchResult>> SearchShortDramasAsync(
+        string query,
+        CancellationToken cancellationToken = default)
+    {
+        var data = await SendForJsonAsync(
+            HttpMethod.Get,
+            "/api/shortdrama/search",
+            [new KeyValuePair<string, string>("q", query)],
+            null,
+            "搜索短剧失败",
+            cancellationToken).ConfigureAwait(false);
+
+        return ReadShortDramaList(data);
+    }
+
+    public async Task<SearchResult?> GetShortDramaDetailAsync(
+        string id,
+        string? name = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new List<KeyValuePair<string, string>>
+        {
+            new("id", id),
+            new("episode", "1")
+        };
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            query.Add(new("name", name));
+        }
+
+        var data = await SendForJsonAsync(
+            HttpMethod.Get,
+            "/api/shortdrama/detail",
+            query,
+            null,
+            "获取短剧详情失败",
+            cancellationToken).ConfigureAwait(false);
+
+        return data.ValueKind == JsonValueKind.Object
+            ? data.Deserialize<SearchResult>(JsonOptions)
+            : null;
+    }
+
+    public async Task<IReadOnlyList<MediaPlatformItem>> GetBilibiliPopularAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var data = await SendForJsonAsync(
+            HttpMethod.Get,
+            "/api/bilibili/popular",
+            [],
+            null,
+            "获取 Bilibili 热门失败",
+            cancellationToken).ConfigureAwait(false);
+
+        return ReadPlatformItems(data, "bilibili");
+    }
+
+    public async Task<IReadOnlyList<MediaPlatformItem>> SearchBilibiliAsync(
+        string query,
+        CancellationToken cancellationToken = default)
+    {
+        var data = await SendForJsonAsync(
+            HttpMethod.Get,
+            "/api/bilibili/search",
+            [new KeyValuePair<string, string>("q", query)],
+            null,
+            "搜索 Bilibili 失败",
+            cancellationToken).ConfigureAwait(false);
+
+        return ReadPlatformItems(data, "bilibili");
+    }
+
+    public async Task<IReadOnlyList<MediaPlatformItem>> GetYouTubePopularAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var data = await SendForJsonAsync(
+            HttpMethod.Get,
+            "/api/youtube/popular",
+            [],
+            null,
+            "获取 YouTube 热门失败",
+            cancellationToken).ConfigureAwait(false);
+
+        return ReadPlatformItems(data, "youtube");
+    }
+
+    public async Task<IReadOnlyList<MediaPlatformItem>> SearchYouTubeAsync(
+        string query,
+        CancellationToken cancellationToken = default)
+    {
+        var data = await SendForJsonAsync(
+            HttpMethod.Get,
+            "/api/youtube/search",
+            [new KeyValuePair<string, string>("q", query)],
+            null,
+            "搜索 YouTube 失败",
+            cancellationToken).ConfigureAwait(false);
+
+        return ReadPlatformItems(data, "youtube");
+    }
+
+    public async Task<TmdbBackdrop?> GetTmdbBackdropAsync(
+        string title,
+        string? year = null,
+        string? type = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new List<KeyValuePair<string, string>> { new("title", title) };
+        if (!string.IsNullOrWhiteSpace(year)) query.Add(new("year", year));
+        if (!string.IsNullOrWhiteSpace(type)) query.Add(new("stype", type));
+
+        var data = await SendForJsonAsync(
+            HttpMethod.Get,
+            "/api/tmdb/backdrop",
+            query,
+            null,
+            "获取 TMDB 视觉信息失败",
+            cancellationToken).ConfigureAwait(false);
+
+        if (data.ValueKind == JsonValueKind.Object &&
+            data.TryGetProperty("data", out var wrapped) &&
+            wrapped.ValueKind == JsonValueKind.Object)
+        {
+            return wrapped.Deserialize<TmdbBackdrop>(JsonOptions);
+        }
+
+        return data.ValueKind == JsonValueKind.Object
+            ? data.Deserialize<TmdbBackdrop>(JsonOptions)
+            : null;
+    }
+
+    public async Task<DoubanQuickInfo?> GetDoubanQuickInfoAsync(
+        string title,
+        CancellationToken cancellationToken = default)
+    {
+        var data = await SendForJsonAsync(
+            HttpMethod.Get,
+            "/api/douban/quick-info",
+            [new KeyValuePair<string, string>("q", title)],
+            null,
+            "获取豆瓣快速信息失败",
+            cancellationToken).ConfigureAwait(false);
+
+        var root = data.ValueKind == JsonValueKind.Object && data.TryGetProperty("data", out var wrapped)
+            ? wrapped
+            : data;
+        return root.ValueKind == JsonValueKind.Object
+            ? new DoubanQuickInfo
+            {
+                Title = ReadString(root, "title", "name"),
+                Year = ReadString(root, "year"),
+                Rating = ReadString(root, "rating", "rate", "score"),
+                Summary = ReadString(root, "summary", "desc", "description"),
+                Genres = ReadStringArray(root, "genres", "genre"),
+                Directors = ReadStringArray(root, "directors", "director"),
+                Cast = ReadStringArray(root, "cast", "actors")
+            }
+            : null;
+    }
+
+    public async Task<IReadOnlyList<DoubanComment>> GetDoubanCommentsAsync(
+        string doubanId,
+        CancellationToken cancellationToken = default)
+    {
+        var data = await SendForJsonAsync(
+            HttpMethod.Get,
+            "/api/douban/comments",
+            [new KeyValuePair<string, string>("id", doubanId)],
+            null,
+            "获取豆瓣短评失败",
+            cancellationToken).ConfigureAwait(false);
+
+        var items = ReadWrappedArray(data, "comments", "data", "list");
+        return items.Select(item => new DoubanComment
+        {
+            Author = ReadString(item, "author", "name"),
+            Content = ReadString(item, "content", "comment", "text"),
+            Rating = ReadString(item, "rating", "score")
+        }).Where(item => !string.IsNullOrWhiteSpace(item.Content)).ToList();
+    }
+
+    public async Task<IReadOnlyList<DoubanRecommendation>> GetDoubanRecommendationsAsync(
+        string doubanId,
+        CancellationToken cancellationToken = default)
+    {
+        var data = await SendForJsonAsync(
+            HttpMethod.Get,
+            "/api/douban/recommends",
+            [new KeyValuePair<string, string>("id", doubanId)],
+            null,
+            "获取豆瓣推荐失败",
+            cancellationToken).ConfigureAwait(false);
+
+        var items = ReadWrappedArray(data, "recommends", "recommendations", "data", "list");
+        return items.Select(item => new DoubanRecommendation
+        {
+            Id = ReadString(item, "id", "douban_id"),
+            Title = ReadString(item, "title", "name"),
+            Cover = ReadString(item, "cover", "poster", "pic"),
+            Rating = ReadString(item, "rating", "rate", "score")
+        }).Where(item => !string.IsNullOrWhiteSpace(item.Title)).ToList();
+    }
+
     private static string NormalizeBaseUrl(string baseUrl)
     {
         var trimmed = baseUrl.Trim();
@@ -486,6 +703,184 @@ public sealed class ServerApiClient : IContentProvider
         }
 
         return [];
+    }
+
+    private static List<SearchResult> ReadShortDramaList(JsonElement element)
+    {
+        return ReadWrappedArray(element, "data", "list", "items", "results")
+            .Select(item => new SearchResult
+            {
+                Id = ReadString(item, "id"),
+                Title = ReadString(item, "name", "title"),
+                Poster = ReadString(item, "cover", "poster", "pic"),
+                Source = "shortdrama",
+                SourceName = "短剧",
+                Description = ReadString(item, "description", "desc"),
+                Year = ReadString(item, "year"),
+                TypeName = "短剧"
+            })
+            .Where(item => !string.IsNullOrWhiteSpace(item.Id) && !string.IsNullOrWhiteSpace(item.Title))
+            .ToList();
+    }
+
+    private static List<MediaPlatformItem> ReadPlatformItems(JsonElement element, string source)
+    {
+        var items = new List<JsonElement>();
+        items.AddRange(ReadWrappedArray(element, "videos", "items", "results", "data"));
+        items.AddRange(ReadWrappedArray(element, "bangumi"));
+
+        return items.Select(item =>
+        {
+            var id = source == "youtube"
+                ? ReadYouTubeId(item)
+                : ReadString(item, "bvid", "aid", "season_id", "media_id", "id");
+            var snippet = item.ValueKind == JsonValueKind.Object && item.TryGetProperty("snippet", out var s)
+                ? s
+                : item;
+            var thumbnail = ReadThumbnail(snippet);
+            return new MediaPlatformItem
+            {
+                Id = id,
+                Title = ReadString(item, "title", "name"),
+                Cover = FirstNonEmpty(ReadString(item, "pic", "cover"), thumbnail),
+                Author = FirstNonEmpty(ReadString(item, "author", "uname"), ReadString(snippet, "channelTitle")),
+                Description = FirstNonEmpty(ReadString(item, "description", "desc"), ReadString(snippet, "description")),
+                Duration = ReadString(item, "duration"),
+                Source = source,
+                Url = source == "youtube" && !string.IsNullOrWhiteSpace(id)
+                    ? $"https://www.youtube.com/watch?v={id}"
+                    : source == "bilibili" && !string.IsNullOrWhiteSpace(id)
+                        ? $"https://www.bilibili.com/video/{id}"
+                        : string.Empty
+            };
+        })
+        .Where(item => !string.IsNullOrWhiteSpace(item.Id) && !string.IsNullOrWhiteSpace(item.Title))
+        .ToList();
+    }
+
+    private static List<JsonElement> ReadWrappedArray(JsonElement element, params string[] wrapperNames)
+    {
+        if (element.ValueKind == JsonValueKind.Array)
+        {
+            return element.EnumerateArray().ToList();
+        }
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return [];
+        }
+
+        foreach (var name in wrapperNames)
+        {
+            if (element.TryGetProperty(name, out var wrapped))
+            {
+                if (wrapped.ValueKind == JsonValueKind.Array)
+                {
+                    return wrapped.EnumerateArray().ToList();
+                }
+
+                if (wrapped.ValueKind == JsonValueKind.Object)
+                {
+                    var nested = ReadWrappedArray(wrapped, wrapperNames);
+                    if (nested.Count > 0)
+                    {
+                        return nested;
+                    }
+                }
+            }
+        }
+
+        return [];
+    }
+
+    private static string ReadString(JsonElement element, params string[] propertyNames)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return string.Empty;
+        }
+
+        foreach (var name in propertyNames)
+        {
+            if (element.TryGetProperty(name, out var property))
+            {
+                var value = property.ReadString();
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static IReadOnlyList<string> ReadStringArray(JsonElement element, params string[] propertyNames)
+    {
+        foreach (var name in propertyNames)
+        {
+            if (!element.TryGetProperty(name, out var property) || property.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            return property.EnumerateArray()
+                .Select(item => item.ReadString())
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Cast<string>()
+                .ToList();
+        }
+
+        return [];
+    }
+
+    private static string ReadYouTubeId(JsonElement item)
+    {
+        if (item.ValueKind != JsonValueKind.Object)
+        {
+            return string.Empty;
+        }
+
+        if (item.TryGetProperty("id", out var id))
+        {
+            if (id.ValueKind == JsonValueKind.Object)
+            {
+                return ReadString(id, "videoId", "channelId", "playlistId");
+            }
+
+            return id.ReadString();
+        }
+
+        return string.Empty;
+    }
+
+    private static string ReadThumbnail(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object ||
+            !element.TryGetProperty("thumbnails", out var thumbnails) ||
+            thumbnails.ValueKind != JsonValueKind.Object)
+        {
+            return string.Empty;
+        }
+
+        foreach (var name in new[] { "medium", "high", "default" })
+        {
+            if (thumbnails.TryGetProperty(name, out var thumb))
+            {
+                var url = ReadString(thumb, "url");
+                if (!string.IsNullOrWhiteSpace(url))
+                {
+                    return url;
+                }
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string FirstNonEmpty(params string[] values)
+    {
+        return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
     }
 
     private static IEnumerable<KeyValuePair<string, JsonElement>> ReadKeyedMap(

@@ -15,6 +15,12 @@ public sealed partial class DetailViewModel : ObservableObject
     private DoubanMovie? _doubanInfo;
 
     [ObservableProperty]
+    private TmdbBackdrop? _tmdbBackdrop;
+
+    [ObservableProperty]
+    private DoubanQuickInfo? _quickInfo;
+
+    [ObservableProperty]
     private bool _isLoading;
 
     [ObservableProperty]
@@ -23,6 +29,8 @@ public sealed partial class DetailViewModel : ObservableObject
     public ObservableCollection<SearchResult> Sources { get; } = [];
     public ObservableCollection<string> Episodes { get; } = [];
     public ObservableCollection<string> EpisodeTitles { get; } = [];
+    public ObservableCollection<DoubanComment> Comments { get; } = [];
+    public ObservableCollection<DoubanRecommendation> Recommendations { get; } = [];
 
     public event Action<string, int>? PlayRequested;
 
@@ -43,6 +51,10 @@ public sealed partial class DetailViewModel : ObservableObject
         Sources.Clear();
         Episodes.Clear();
         EpisodeTitles.Clear();
+        Comments.Clear();
+        Recommendations.Clear();
+        TmdbBackdrop = null;
+        QuickInfo = null;
         ErrorMessage = null;
         IsLoading = true;
 
@@ -53,7 +65,10 @@ public sealed partial class DetailViewModel : ObservableObject
 
             Sources.Add(seed);
 
-            if (provider is not null && !string.IsNullOrWhiteSpace(seed.Source) && !string.IsNullOrWhiteSpace(seed.Id))
+            if (provider is not null &&
+                !string.Equals(seed.Source, "shortdrama", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(seed.Source) &&
+                !string.IsNullOrWhiteSpace(seed.Id))
             {
                 var detail = await provider.DetailAsync(seed.Source, seed.Id, cancellationToken).ConfigureAwait(false);
                 if (detail is not null && detail.Episodes.Count > 0)
@@ -82,6 +97,59 @@ public sealed partial class DetailViewModel : ObservableObject
                 catch
                 {
                     // Douban failure does not block the detail page
+                }
+            }
+
+            if (provider is not null)
+            {
+                try
+                {
+                    var type = string.Equals(seed.Source, "movie", StringComparison.OrdinalIgnoreCase) ? "movie" : "tv";
+                    TmdbBackdrop = await provider.GetTmdbBackdropAsync(Result?.Title ?? seed.Title, Result?.Year ?? seed.Year, type, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch
+                {
+                    // TMDB enrichment is optional.
+                }
+
+                try
+                {
+                    QuickInfo = await provider.GetDoubanQuickInfoAsync(Result?.Title ?? seed.Title, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Douban quick-info is optional.
+                }
+
+                if (seed.DoubanId is int detailDoubanId && detailDoubanId > 0)
+                {
+                    try
+                    {
+                        foreach (var comment in await provider.GetDoubanCommentsAsync(detailDoubanId.ToString(), cancellationToken)
+                                     .ConfigureAwait(false))
+                        {
+                            Comments.Add(comment);
+                        }
+                    }
+                    catch
+                    {
+                        // Douban comments are optional.
+                    }
+
+                    try
+                    {
+                        foreach (var item in await provider.GetDoubanRecommendationsAsync(detailDoubanId.ToString(), cancellationToken)
+                                     .ConfigureAwait(false))
+                        {
+                            Recommendations.Add(item);
+                        }
+                    }
+                    catch
+                    {
+                        // Douban recommendations are optional.
+                    }
                 }
             }
         }

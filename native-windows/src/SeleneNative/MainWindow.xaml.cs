@@ -32,6 +32,7 @@ public sealed partial class MainWindow : Window
     private HistoryPage _historyPage = null!;
     private SettingsPage _settingsPage = null!;
     private LivePage _livePage = null!;
+    private LunaFeaturePage _lunaFeaturePage = null!;
     private CategoryPage _categoryPage = null!;
     private DetailPage _detailPage = null!;
     private PlayerPage _playerPage = null!;
@@ -76,6 +77,7 @@ public sealed partial class MainWindow : Window
         _historyPage = new HistoryPage();
         _settingsPage = new SettingsPage();
         _livePage = new LivePage();
+        _lunaFeaturePage = new LunaFeaturePage();
         _categoryPage = new CategoryPage();
         _detailPage = new DetailPage();
         _playerPage = new PlayerPage();
@@ -88,6 +90,7 @@ public sealed partial class MainWindow : Window
         _homePage.BangumiItemClicked += OnHomeBangumiItemClicked;
         _categoryPage.DoubanMovieClicked += OnHomeDoubanMovieClicked;
         _categoryPage.BangumiItemClicked += OnHomeBangumiItemClicked;
+        _lunaFeaturePage.ShortDramaDetailRequested += OnShortDramaDetailRequested;
         _loginPage.SessionChanged += OnLoginSessionChangedAsync;
 
         _contentHost = new ContentControl
@@ -139,6 +142,9 @@ public sealed partial class MainWindow : Window
         _navigationView.MenuItems.Add(NavItem("动漫", "anime", Symbol.AllApps));
         _navigationView.MenuItems.Add(NavItem("综艺", "shows", Symbol.Play));
         _navigationView.MenuItems.Add(NavItem("直播", "live", Symbol.Camera));
+        _navigationView.MenuItems.Add(NavItem("短剧", "shortdrama", Symbol.Video));
+        _navigationView.MenuItems.Add(NavItem("Bilibili", "bilibili", Symbol.World));
+        _navigationView.MenuItems.Add(NavItem("YouTube", "youtube", Symbol.World));
         _navigationView.MenuItems.Add(new NavigationViewItemSeparator());
         _navigationView.MenuItems.Add(NavItem("登录", "login", Symbol.Contact));
         _navigationView.MenuItems.Add(NavItem("收藏", "favorites", Symbol.Favorite));
@@ -285,6 +291,12 @@ public sealed partial class MainWindow : Window
                 _settingsPage.Build(Settings);
                 _contentHost!.Content = _settingsPage;
                 break;
+            case "shortdrama":
+            case "bilibili":
+            case "youtube":
+                await _lunaFeaturePage.BuildAsync(page, provider);
+                _contentHost!.Content = _lunaFeaturePage;
+                break;
             case "live":
                 await ShowLiveAsync(provider);
                 break;
@@ -384,6 +396,11 @@ public sealed partial class MainWindow : Window
     }
 
     private void OnSearchDetailRequested(SearchResult result, IContentProvider? provider)
+    {
+        ShowDetail(result, provider);
+    }
+
+    private void OnShortDramaDetailRequested(SearchResult result, IContentProvider? provider)
     {
         ShowDetail(result, provider);
     }

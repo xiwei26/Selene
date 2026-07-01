@@ -1,0 +1,8 @@
+<UserControl
+    x:Class="SeleneNative.Views.LunaFeaturePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer>
+        <StackPanel x:Name="ContentStack" Padding="28" Spacing="18" />
+    </ScrollViewer>
+</UserControl>
