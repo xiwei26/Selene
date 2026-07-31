@@ -5,38 +5,64 @@ struct PlayerView: View {
     let playerStore: PlayerStore
     var provider: ContentProvider?
 
-    @State private var tmdbBackdrop: TMDBBackdrop?
-    @State private var quickInfo: DoubanQuickInfo?
-    @State private var comments: [DoubanComment] = []
-    @State private var recommendations: [DoubanRecommendation] = []
+    @State private var metadata = PlayerMetadataViewModel()
 
     var body: some View {
-        VStack(spacing: 0) {
-            Group {
-                if let player = playerStore.player {
-                    NativeVideoPlayerView(player: player)
-                        .aspectRatio(contentMode: .fit)
-                } else if let error = playerStore.playbackError {
-                    playbackErrorView(error)
-                } else {
-                    ContentUnavailableView(
-                        "选择剧集播放",
-                        systemImage: "play.circle",
-                        description: Text("从详情页面选择一个剧集开始播放")
-                    )
+        GeometryReader { proxy in
+            let hasInfo = playerStore.currentResult != nil
+            VStack(spacing: 0) {
+                playbackSurface
+                    .frame(maxWidth: .infinity)
+                    .frame(height: videoHeight(in: proxy.size.height, hasInfo: hasInfo))
+                    .background(Color.black)
+
+                if let result = playerStore.currentResult {
+                    ScrollView(.vertical) {
+                        playerInfo(result)
+                            .padding(.horizontal, AppTheme.pagePadding)
+                            .padding(.vertical, 12)
+                    }
+                    .frame(height: infoPaneHeight(in: proxy.size.height, hasInfo: hasInfo))
+                    .scrollIndicators(.visible)
+                    .background(AppTheme.pageBackground)
                 }
             }
-
-            if let result = playerStore.currentResult {
-                playerInfo(result)
-                    .padding(.horizontal, AppTheme.pagePadding)
-                    .padding(.vertical, 12)
-            }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
         }
         .appPageBackground()
         .task(id: playerStore.currentResult.map { "\($0.source)-\($0.id)" } ?? "none") {
             await loadSupplementaryInfo()
         }
+    }
+
+    @ViewBuilder
+    private var playbackSurface: some View {
+        if let player = playerStore.player {
+            NativeVideoPlayerView(player: player)
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let error = playerStore.playbackError {
+            playbackErrorView(error)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ContentUnavailableView(
+                "选择剧集播放",
+                systemImage: "play.circle",
+                description: Text("从详情页面选择一个剧集开始播放")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func videoHeight(in availableHeight: CGFloat, hasInfo: Bool) -> CGFloat {
+        max(240, availableHeight - infoPaneHeight(in: availableHeight, hasInfo: hasInfo))
+    }
+
+    private func infoPaneHeight(in availableHeight: CGFloat, hasInfo: Bool) -> CGFloat {
+        guard hasInfo else { return 0 }
+        let preferredHeight = max(availableHeight * 0.34, 220)
+        let maximumHeight = min(360, availableHeight * 0.45)
+        return min(preferredHeight, maximumHeight)
     }
 
     private func playerInfo(_ result: SearchResult) -> some View {
@@ -63,10 +89,7 @@ struct PlayerView: View {
             LunaPlayInfoPanel(
                 result: result,
                 episodeIndex: playerStore.currentEpisodeIndex,
-                tmdbBackdrop: tmdbBackdrop,
-                quickInfo: quickInfo,
-                comments: comments,
-                recommendations: recommendations
+                metadata: metadata
             )
         }
         .appSurface()
@@ -106,33 +129,8 @@ struct PlayerView: View {
     }
 
     private func loadSupplementaryInfo() async {
-        tmdbBackdrop = nil
-        quickInfo = nil
-        comments = []
-        recommendations = []
-
-        guard let provider, let result = playerStore.currentResult else { return }
-
-        async let backdrop = try? provider.getTMDBBackdrop(
-            title: result.title,
-            year: result.year.isEmpty ? nil : result.year,
-            type: result.typeName
-        )
-        async let quick = try? provider.getDoubanQuickInfo(title: result.title)
-        let doubanId = result.doubanID.map(String.init)
-        async let loadedComments: [DoubanComment] = {
-            guard let doubanId else { return [] }
-            return (try? await provider.getDoubanComments(doubanId: doubanId)) ?? []
-        }()
-        async let loadedRecommendations: [DoubanRecommendation] = {
-            guard let doubanId else { return [] }
-            return (try? await provider.getDoubanRecommendations(doubanId: doubanId)) ?? []
-        }()
-
-        tmdbBackdrop = await backdrop
-        quickInfo = await quick
-        comments = await loadedComments
-        recommendations = await loadedRecommendations
+        guard let result = playerStore.currentResult else { return }
+        await metadata.load(result: result, provider: provider)
     }
 
     private func playbackErrorView(_ error: String) -> some View {
@@ -164,19 +162,30 @@ struct PlayerView: View {
 private struct LunaPlayInfoPanel: View {
     let result: SearchResult
     let episodeIndex: Int
-    let tmdbBackdrop: TMDBBackdrop?
-    let quickInfo: DoubanQuickInfo?
-    let comments: [DoubanComment]
-    let recommendations: [DoubanRecommendation]
+    let metadata: PlayerMetadataViewModel
+
+    private var tmdbBackdrop: TMDBBackdrop? {
+        metadata.tmdbBackdrop
+    }
+
+    private var quickInfo: DoubanQuickInfo? {
+        metadata.quickInfo
+    }
+
+    private var comments: [DoubanComment] {
+        metadata.comments
+    }
+
+    private var recommendations: [DoubanRecommendation] {
+        metadata.recommendations
+    }
 
     private var title: String {
         tmdbBackdrop?.title?.nonEmpty ?? result.title
     }
 
     private var overview: String? {
-        tmdbBackdrop?.overview?.nonEmpty
-            ?? quickInfo?.summary?.nonEmpty
-            ?? result.description?.nonEmpty
+        metadata.overview?.nonEmpty
     }
 
     private var ratingText: String? {
@@ -208,6 +217,10 @@ private struct LunaPlayInfoPanel: View {
                 if !recommendations.isEmpty {
                     recommendationsSection
                 }
+
+                if metadata.isLoading {
+                    loadingRow
+                }
             }
         }
     }
@@ -217,7 +230,18 @@ private struct LunaPlayInfoPanel: View {
             tmdbBackdrop != nil ||
             quickInfo != nil ||
             !comments.isEmpty ||
-            !recommendations.isEmpty
+            !recommendations.isEmpty ||
+            metadata.isLoading
+    }
+
+    private var loadingRow: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+            Text("正在加载更多详情...")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private var hero: some View {

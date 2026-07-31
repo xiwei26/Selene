@@ -4,6 +4,7 @@ Selene is a native desktop video client backed by the LunaTV API surface.
 
 The desktop implementation is now focused on native clients:
 
+- `native-ios/`: SwiftUI iPhone/iPad app with an iPad-first split-view layout.
 - `native-macos/`: SwiftUI macOS app.
 - `native-windows/`: WinUI 3 / .NET 8 Windows app.
 
@@ -99,9 +100,20 @@ The generated app bundle is:
 native-macos/SeleneNative.app
 ```
 
+## Native iOS
+
+The iPhone and iPad rewrite lives in `native-ios/`.
+
+Open `native-ios/Selene.xcodeproj`, select the `Selene` scheme and an iPad
+Simulator, then run the app. Its primary navigation and feature surface track
+the native macOS client, including LunaTV login/local subscriptions, SSE
+search, Douban browsing/details, live TV, favorites/history, platform channels,
+administration, and progress-aware AVKit playback.
+
 ## Repository Layout
 
 ```text
+native-ios/        Native SwiftUI iPhone/iPad client
 native-macos/      Native SwiftUI macOS client
 native-windows/    Native WinUI 3 Windows client
 lib/               Shared Flutter-era API references and mobile/web code
