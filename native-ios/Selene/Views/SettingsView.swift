@@ -55,7 +55,7 @@ struct SettingsView: View {
                     Task { await appModel.refreshLibrary() }
                 }
                 Button("清理图片与网络缓存", systemImage: "trash") {
-                    URLCache.shared.removeAllCachedResponses()
+                    appModel.clearCaches()
                 }
             }
 

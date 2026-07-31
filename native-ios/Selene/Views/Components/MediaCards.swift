@@ -3,6 +3,10 @@ import SwiftUI
 struct PosterCard: View {
     let movie: DoubanMovie
 
+    /// Cards have to widen with the text they hold, otherwise large Dynamic Type
+    /// sizes truncate every title to an ellipsis.
+    @ScaledMetric(relativeTo: .subheadline) private var posterWidth: CGFloat = 152
+
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             RemotePosterView(urlString: movie.poster)
@@ -26,9 +30,15 @@ struct PosterCard: View {
             .foregroundStyle(.secondary)
             .lineLimit(1)
         }
+        .frame(width: posterWidth)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel([movie.title, movie.year, movie.rate].compactMap { $0 }.joined(separator: "，"))
+        // `compactMap` only drops nil, so a blank year used to read as "标题，，8.5".
+        .accessibilityLabel(
+            [movie.title, movie.year, movie.rate ?? ""]
+                .filter { !$0.isEmpty }
+                .joined(separator: "，")
+        )
     }
 }
 

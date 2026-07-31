@@ -243,6 +243,12 @@ struct SearchResult: Codable, Identifiable, Hashable, Sendable {
     let typeName: String?
     let qualityTag: String?
     let dramaName: String?
+    /// Set when the row came from a local Base58 subscription resource rather
+    /// than a LunaTV server, so detail loading can stay off `/api/detail`.
+    let isLocal: Bool
+    /// The originating MacCMS `api` endpoint for a local row. Carried on the
+    /// result so detail loading does not need the subscription list again.
+    let localAPI: String?
 
     enum CodingKeys: String, CodingKey {
         case id, title, poster, episodes, source, year, remarks, resolution
@@ -254,6 +260,8 @@ struct SearchResult: Codable, Identifiable, Hashable, Sendable {
         case typeName = "type_name"
         case qualityTag = "quality_tag"
         case dramaName = "drama_name"
+        case isLocal = "is_local"
+        case localAPI = "local_api"
     }
 
     init(
@@ -272,7 +280,9 @@ struct SearchResult: Codable, Identifiable, Hashable, Sendable {
         doubanID: Int? = nil,
         typeName: String? = nil,
         qualityTag: String? = nil,
-        dramaName: String? = nil
+        dramaName: String? = nil,
+        isLocal: Bool = false,
+        localAPI: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -290,6 +300,8 @@ struct SearchResult: Codable, Identifiable, Hashable, Sendable {
         self.typeName = typeName
         self.qualityTag = qualityTag
         self.dramaName = dramaName
+        self.isLocal = isLocal
+        self.localAPI = localAPI
     }
 
     init(from decoder: Decoder) throws {
@@ -310,6 +322,8 @@ struct SearchResult: Codable, Identifiable, Hashable, Sendable {
         typeName = try container.decodeIfPresent(String.self, forKey: .typeName)
         qualityTag = try container.decodeIfPresent(String.self, forKey: .qualityTag)
         dramaName = try container.decodeIfPresent(String.self, forKey: .dramaName)
+        isLocal = try container.decodeIfPresent(Bool.self, forKey: .isLocal) ?? false
+        localAPI = try container.decodeIfPresent(String.self, forKey: .localAPI)
     }
 
     var metadata: String {
@@ -318,6 +332,10 @@ struct SearchResult: Codable, Identifiable, Hashable, Sendable {
             .filter { !$0.isEmpty }
             .joined(separator: " · ")
     }
+
+    /// `id` is only unique within one source, so aggregated multi-source results
+    /// collide in SwiftUI collections. Key rows on this instead.
+    var uniqueKey: String { "\(source)|\(id)" }
 
     func episodeTitle(at index: Int) -> String {
         guard episodeTitles.indices.contains(index), !episodeTitles[index].isEmpty else {

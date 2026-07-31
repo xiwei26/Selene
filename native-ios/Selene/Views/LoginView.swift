@@ -17,28 +17,40 @@ struct LoginView: View {
     @State private var showsLocalMode = false
     @State private var subscriptionContent = ""
     @FocusState private var focusedField: Field?
+    @ScaledMetric(relativeTo: .largeTitle) private var logoSize: CGFloat = 84
 
     var body: some View {
         ZStack {
             AppBackground()
 
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 64) {
-                    brand
-                        .frame(maxWidth: 420)
-                    form
-                        .frame(maxWidth: 440)
-                }
+            // The form must stay reachable once the keyboard covers most of a
+            // compact screen, so the whole layout scrolls. minHeight keeps the
+            // centered look while there is room to spare.
+            GeometryReader { proxy in
+                ScrollView {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 64) {
+                            brand
+                                .frame(maxWidth: 420)
+                            form
+                                .frame(maxWidth: 440)
+                        }
 
-                VStack(spacing: 34) {
-                    brand
-                    form
+                        VStack(spacing: 34) {
+                            brand
+                            form
+                        }
+                    }
+                    .padding(32)
+                    .frame(maxWidth: 980)
+                    .frame(maxWidth: .infinity, minHeight: proxy.size.height)
                 }
+                .scrollDismissesKeyboard(.interactively)
             }
-            .padding(32)
-            .frame(maxWidth: 980)
         }
         .onAppear {
+            // Raising the keyboard at launch on iPhone hides the form behind it.
+            guard horizontalSizeClass == .regular else { return }
             focusedField = .server
         }
     }
@@ -46,16 +58,17 @@ struct LoginView: View {
     private var brand: some View {
         VStack(alignment: horizontalSizeClass == .regular ? .leading : .center, spacing: 18) {
             Image(systemName: "moon.stars.fill")
-                .font(.system(size: 42, weight: .semibold))
+                .font(.largeTitle.weight(.semibold))
                 .foregroundStyle(.white)
-                .frame(width: 84, height: 84)
+                .frame(width: logoSize, height: logoSize)
                 .background(AppTheme.accentGradient, in: RoundedRectangle(cornerRadius: 24))
                 .shadow(color: AppTheme.accent.opacity(0.25), radius: 24, y: 12)
                 .onTapGesture(perform: revealLocalMode)
 
             VStack(alignment: horizontalSizeClass == .regular ? .leading : .center, spacing: 8) {
                 Text("Selene")
-                    .font(.system(size: 46, weight: .bold, design: .rounded))
+                    .font(.largeTitle.bold())
+                    .fontDesign(.rounded)
                 Text("为 iPad 重新设计的原生 LunaTV 客户端")
                     .font(.title3)
                     .foregroundStyle(.secondary)

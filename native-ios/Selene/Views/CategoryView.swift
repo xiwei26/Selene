@@ -7,7 +7,9 @@ struct CategoryView: View {
     let category: MediaCategory
 
     private let columns = [
-        GridItem(.adaptive(minimum: 145, maximum: 190), spacing: 18, alignment: .top)
+        // No maximum: PosterCard scales with Dynamic Type and would overflow a
+        // capped column at accessibility text sizes.
+        GridItem(.adaptive(minimum: 145), spacing: 18, alignment: .top)
     ]
 
     var body: some View {
@@ -24,11 +26,16 @@ struct CategoryView: View {
                     ProgressView("正在加载\(category.title)…")
                         .frame(maxWidth: .infinity, minHeight: 240)
                 case .failed(let message):
-                    ContentUnavailableView(
-                        "无法加载\(category.title)",
-                        systemImage: "wifi.exclamationmark",
-                        description: Text(message)
-                    )
+                    ContentUnavailableView {
+                        Label("无法加载\(category.title)", systemImage: "wifi.exclamationmark")
+                    } description: {
+                        Text(message)
+                    } actions: {
+                        Button("重试") {
+                            Task { await reload(force: true) }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                     .frame(maxWidth: .infinity, minHeight: 300)
                 case .loaded:
                     if store.items.isEmpty {
@@ -55,12 +62,22 @@ struct CategoryView: View {
             .frame(maxWidth: .infinity)
         }
         .refreshable {
-            guard let client = appModel.client else { return }
-            await store.load(category: category, using: client, force: true)
+            await reload(force: true)
         }
-        .task(id: appModel.session?.id) {
-            guard let client = appModel.client else { return }
-            await store.load(category: category, using: client)
+        // Keyed on the category as well as the session so the correct data loads
+        // even if this view is reused instead of recreated per category.
+        .task(id: LoadKey(session: appModel.session?.id, category: category)) {
+            await reload(force: false)
         }
+    }
+
+    private func reload(force: Bool) async {
+        guard let client = appModel.client else { return }
+        await store.load(category: category, using: client, force: force)
+    }
+
+    private struct LoadKey: Hashable {
+        let session: UUID?
+        let category: MediaCategory
     }
 }

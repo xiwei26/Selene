@@ -22,105 +22,66 @@ final class LiveStore {
         return channels.filter { $0.group == selectedGroup }
     }
 
-    func loadSources(appModel: AppModel) async {
+    func loadSources(
+        isLocalMode: Bool,
+        localSources: [LiveSource],
+        client: LunaTVClient?
+    ) async {
         phase = .loading
         do {
-            if appModel.session?.isLocalMode == true {
-                sources = appModel.session?.localLiveSources.filter { !$0.disabled } ?? []
-            } else if let client = appModel.client {
+            if isLocalMode {
+                sources = localSources.filter { !$0.disabled }
+            } else if let client {
                 sources = try await client.liveSources().filter { !$0.disabled }
+            } else {
+                sources = []
             }
+            // Assigning selectedSource drives channel loading via the view task.
             selectedSource = selectedSource.flatMap { selected in
                 sources.first { $0.id == selected.id }
             } ?? sources.first
-            if let selectedSource {
-                await loadChannels(source: selectedSource, appModel: appModel)
-            } else {
+            if selectedSource == nil {
                 channels = []
-                phase = .loaded
             }
+            phase = .loaded
         } catch {
-            phase = .failed(error.localizedDescription)
+            phase = isCancellation(error) ? .idle : .failed(error.localizedDescription)
         }
     }
 
-    func loadChannels(source: LiveSource, appModel: AppModel) async {
+    func loadChannels(
+        source: LiveSource,
+        isLocalMode: Bool,
+        client: LunaTVClient?
+    ) async {
         selectedSource = source
         selectedGroup = nil
         phase = .loading
         do {
-            if appModel.session?.isLocalMode == true {
-                channels = try await LocalLiveService.channels(source: source)
-            } else if let client = appModel.client {
+            if isLocalMode {
+                channels = try await client?.localLiveChannels(source: source) ?? []
+            } else if let client {
                 channels = try await client.liveChannels(source: source.key)
+            } else {
+                channels = []
             }
             phase = .loaded
         } catch {
             channels = []
-            phase = .failed(error.localizedDescription)
+            phase = isCancellation(error) ? .idle : .failed(error.localizedDescription)
         }
     }
 
-    func loadEPG(channel: LiveChannel, appModel: AppModel) async {
-        guard let source = selectedSource, !channel.tvgID.isEmpty, appModel.session?.isLocalMode != true else {
+    func loadEPG(
+        channel: LiveChannel,
+        isLocalMode: Bool,
+        client: LunaTVClient?
+    ) async {
+        guard let source = selectedSource, !channel.tvgID.isEmpty, !isLocalMode else {
             epg = nil
             return
         }
-        epg = try? await appModel.client?.liveEPG(tvgID: channel.tvgID, source: source.key)
-    }
-}
-
-enum LocalLiveService {
-    static func channels(source: LiveSource) async throws -> [LiveChannel] {
-        guard let url = URL(string: source.url) else { throw APIError.invalidServerURL }
-        var request = URLRequest(url: url, timeoutInterval: 25)
-        if !source.ua.isEmpty {
-            request.setValue(source.ua, forHTTPHeaderField: "User-Agent")
-        }
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let response = response as? HTTPURLResponse, (200...299).contains(response.statusCode) else {
-            throw APIError.invalidResponse
-        }
-        guard let text = String(data: data, encoding: .utf8) else {
-            throw APIError.decodingFailed
-        }
-        return parseM3U(text)
-    }
-
-    private static func parseM3U(_ text: String) -> [LiveChannel] {
-        var channels: [LiveChannel] = []
-        var pendingMetadata: String?
-
-        for rawLine in text.components(separatedBy: .newlines) {
-            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-            if line.hasPrefix("#EXTINF") {
-                pendingMetadata = line
-            } else if !line.isEmpty, !line.hasPrefix("#"), let metadata = pendingMetadata {
-                let name = metadata.split(separator: ",", maxSplits: 1).last.map(String.init) ?? "未知频道"
-                let tvgID = attribute("tvg-id", in: metadata)
-                let logo = attribute("tvg-logo", in: metadata)
-                let group = attribute("group-title", in: metadata).nonEmpty ?? "未分组"
-                channels.append(
-                    LiveChannel(
-                        id: "\(tvgID)-\(line)",
-                        tvgID: tvgID,
-                        name: name,
-                        logo: logo,
-                        group: group,
-                        url: line
-                    )
-                )
-                pendingMetadata = nil
-            }
-        }
-        return channels
-    }
-
-    private static func attribute(_ key: String, in text: String) -> String {
-        guard let range = text.range(of: "\(key)=\"") else { return "" }
-        let suffix = text[range.upperBound...]
-        guard let end = suffix.firstIndex(of: "\"") else { return "" }
-        return String(suffix[..<end])
+        epg = try? await client?.liveEPG(tvgID: channel.tvgID, source: source.key)
     }
 }
 
@@ -135,6 +96,10 @@ final class PlayerCoordinator {
     var playTime = 0
     var totalTime = 0
     var errorMessage: String?
+    /// Non-nil while a live channel is playing; live has no play record.
+    var liveChannelName: String?
+    /// Optional EPG snapshot shown in the unified playback UI for live.
+    var liveEPG: EPGData?
 
     @ObservationIgnored private var statusObservation: NSKeyValueObservation?
     @ObservationIgnored private var timeObservation: Any?
@@ -147,9 +112,40 @@ final class PlayerCoordinator {
     var isPlaying: Bool { player != nil }
 
     func open(result: SearchResult, episode: Int = 0, seekTo: Int = 0) {
+        liveChannelName = nil
+        liveEPG = nil
         sourceResults = sourceResults.isEmpty ? [result] : sourceResults
         currentResult = result
         playEpisode(episode, seekTo: seekTo)
+    }
+
+    /// Live playback shares this coordinator so only one AVPlayer is ever alive.
+    /// Live streams carry no play record, so `liveChannelName` marks the mode.
+    func openLive(channel: LiveChannel, epg: EPGData? = nil) {
+        guard let url = URL(string: channel.url) else {
+            errorMessage = "播放地址无效"
+            return
+        }
+        stopPlayerOnly()
+        activateAudioSession()
+        sourceResults = []
+        currentResult = nil
+        episodeIndex = 0
+        playTime = 0
+        totalTime = 0
+        errorMessage = nil
+        liveChannelName = channel.name
+        liveEPG = epg
+        let item = AVPlayerItem(url: url)
+        let player = AVPlayer(playerItem: item)
+        self.player = player
+        observe(player: player, item: item, seekTo: 0)
+        player.play()
+    }
+
+    func updateLiveEPG(_ epg: EPGData?) {
+        guard isLive else { return }
+        liveEPG = epg
     }
 
     func playEpisode(_ index: Int, seekTo: Int = 0) {
@@ -160,6 +156,9 @@ final class PlayerCoordinator {
             return
         }
         stopPlayerOnly()
+        activateAudioSession()
+        liveChannelName = nil
+        liveEPG = nil
         episodeIndex = index
         errorMessage = nil
         let item = AVPlayerItem(url: url)
@@ -170,22 +169,46 @@ final class PlayerCoordinator {
     }
 
     func switchSource(_ result: SearchResult) {
+        let currentURL = currentResult?.episodes.indices.contains(episodeIndex) == true
+            ? currentResult?.episodes[episodeIndex]
+            : nil
         currentResult = result
-        playEpisode(min(episodeIndex, max(result.episodes.count - 1, 0)))
+        playEpisode(Self.episodeIndex(in: result, matching: currentURL, fallback: episodeIndex))
     }
 
     func resume(record: PlayRecord, client: LunaTVClient) async {
         do {
             let result = try await client.detail(source: record.source, id: record.itemID)
             sourceResults = [result]
-            open(result: result, episode: min(record.episodeIndex, max(result.episodes.count - 1, 0)), seekTo: record.playTime)
+            open(
+                result: result,
+                episode: Self.episodeIndex(
+                    in: result,
+                    matching: record.episodeURL,
+                    fallback: record.episodeIndex
+                ),
+                seekTo: record.playTime
+            )
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
+    /// Prefers the exact episode stream URL, falling back to the stored position
+    /// when the backend no longer serves that URL.
+    private static func episodeIndex(
+        in result: SearchResult,
+        matching url: String?,
+        fallback: Int
+    ) -> Int {
+        if let url, !url.isEmpty, let match = result.episodes.firstIndex(of: url) {
+            return match
+        }
+        return min(max(fallback, 0), max(result.episodes.count - 1, 0))
+    }
+
     func makeRecord() -> PlayRecord? {
-        guard let result = currentResult else { return nil }
+        guard !isLive, let result = currentResult else { return nil }
         return PlayRecord(
             id: "\(result.source)+\(result.id)",
             source: result.source,
@@ -201,8 +224,25 @@ final class PlayerCoordinator {
             searchTitle: result.title,
             remarks: result.remarks,
             doubanID: result.doubanID,
-            type: result.typeName
+            type: result.typeName,
+            episodeURL: result.episodes.indices.contains(episodeIndex)
+                ? result.episodes[episodeIndex]
+                : nil
         )
+    }
+
+    /// Snapshot progress for backgrounding without tearing the player down.
+    func checkpointRecord() -> PlayRecord? {
+        makeRecord()
+    }
+
+    /// Ends playback and returns the final VOD record (if any) so a single
+    /// caller owns both teardown and persistence.
+    @discardableResult
+    func stopAndMakeRecord() -> PlayRecord? {
+        let record = makeRecord()
+        stop()
+        return record
     }
 
     func stop() {
@@ -213,7 +253,12 @@ final class PlayerCoordinator {
         playTime = 0
         totalTime = 0
         errorMessage = nil
+        liveChannelName = nil
+        liveEPG = nil
     }
+
+    /// Live streams have no resumable position, so no record is produced.
+    var isLive: Bool { liveChannelName != nil }
 
     private func observe(player: AVPlayer, item: AVPlayerItem, seekTo: Int) {
         statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
@@ -248,10 +293,18 @@ final class PlayerCoordinator {
         statusObservation?.invalidate()
         statusObservation = nil
         player?.pause()
+        // Drop the item so its network loading does not outlive the pause.
+        player?.replaceCurrentItem(with: nil)
         player = nil
     }
-}
 
-private extension String {
-    var nonEmpty: String? { isEmpty ? nil : self }
+    /// Plays audio when the ring/silent switch is silent and keeps the session
+    /// eligible for background playback (see `UIBackgroundModes` = audio).
+    private func activateAudioSession() {
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, mode: .moviePlayback)
+        try? session.setActive(true)
+        #endif
+    }
 }
