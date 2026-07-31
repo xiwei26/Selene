@@ -135,7 +135,7 @@ struct MainView: View {
                         }
                     }
                 }
-                .toolbar(isPlaying ? .hidden : .visible, for: .windowToolbar)
+                .toolbar(.visible, for: .windowToolbar)
         }
         .task(id: sessionStore.session?.id) {
             guard let url = sessionStore.session?.serverURL else { return }

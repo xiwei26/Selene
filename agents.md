@@ -32,6 +32,63 @@ In particular, Douban category data should use:
 
 Do not assume the old direct Douban mobile endpoints are the primary backend.
 
+## Native Client Architecture
+
+- `native-ios/` is the native iPhone/iPad client. Treat `native-macos/` as the
+  behavioral reference, but use iPadOS-native patterns: `NavigationSplitView`,
+  adaptive grids, sheets, toolbars, and compact-width fallbacks.
+- Keep networking in the `LunaTVClient` actor and keep UI state in
+  `@MainActor @Observable` stores. Do not put URLSession calls directly in
+  SwiftUI views.
+- Playback state belongs in one shared coordinator. Persist records by exact
+  `source + id` before clearing the player, and preserve backend episode order.
+- The local Base58 subscription mode is intentionally separate from a server
+  session. Do not assume favorites, history, or admin routes are available when
+  `isLocalMode` is true.
+
+## API and Decoding Lessons
+
+- LunaTV responses are not uniform. Support bare arrays/objects and common
+  `{ "data": ... }`, `{ "success": true, "data": ... }`, `list`, `results`,
+  and `items` wrappers where the route permits them.
+- Decode the preferred wrapper before decoding a permissive model. Models with
+  default values can incorrectly decode an outer `{ "data": ... }` object as an
+  empty model if the bare-object attempt runs first.
+- SSE search events may put the event name inside JSON data (`type`) instead of
+  an SSE `event:` line. Handle `start`, `source_result`, `source_error`, and
+  `complete`, and keep a normal `/api/search` fallback.
+- Preserve the backend cookie on every authenticated request, and include the
+  base URL path when joining route paths so installations under a reverse-proxy
+  prefix continue to work.
+- Add a small `URLProtocol` contract smoke test for every new route family. At
+  minimum assert the exact query shape, cookie header, and wrapper decoding.
+
+## iOS Build and Distribution Lessons
+
+- A simulator `.app` or simulator zip cannot be installed on a physical iPad.
+  A device install requires an `iphoneos` archive, Apple signing, and an IPA or
+  direct Xcode install. SideStore also requires a device IPA; never reuse the
+  `iphonesimulator` binary.
+- The iPad-first app can be compiled with strict warnings-as-errors typechecking
+  even when Xcode cannot resolve a simulator destination because the installed
+  Simulator Runtime does not match the Xcode SDK. Record that environment issue
+  separately from source failures.
+- `native-ios/script/package_simulator.sh` creates and verifies a universal
+  arm64/x86_64 simulator app. Keep `native-ios/build/` ignored and do not commit
+  derived data, app bundles, zips, or test binaries.
+- For visual verification, install the generated app into an available iPad
+  Simulator and launch it. Check the login form, keyboard avoidance, split-view
+  navigation, playback sheet, and compact layout before handing off.
+
+## Change and Git Hygiene
+
+- Check `git worktree list`, `git status -sb`, and the diff before staging. An
+  uncommitted change belongs to a worktree, not to an abstract branch; do not
+  silently stage unrelated work.
+- Create a feature branch from the repository default branch for publishable
+  work. Keep generated packages out of commits and include the validation and
+  packaging result in the PR description.
+
 ## Packaging After Changes
 
 After every native client modification, rebuild and repackage the affected
