@@ -16,7 +16,11 @@ enum URLNormalizer {
             return nil
         }
 
-        components.path = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        // A URL with an authority component requires an empty path or one with a
+        // leading slash; trimming both ends would make `components.url` nil for
+        // reverse-proxy installs served under a subpath.
+        let trimmedPath = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        components.path = trimmedPath.isEmpty ? "" : "/" + trimmedPath
         return components.url
     }
 }

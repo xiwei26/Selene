@@ -1,16 +1,15 @@
-import AVKit
 import SwiftUI
 
 struct LiveView: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(PlayerCoordinator.self) private var coordinator
     @State private var store = LiveStore()
-    @State private var playerChannel: LiveChannel?
 
     private let columns = [GridItem(.adaptive(minimum: 180, maximum: 280), spacing: 14)]
 
     var body: some View {
         VStack(spacing: 0) {
-            LiveFilterBar(store: store, sourceAction: selectSource)
+            LiveFilterBar(store: store)
                 .padding()
 
             Group {
@@ -18,7 +17,16 @@ struct LiveView: View {
                 case .idle, .loading:
                     ProgressView("正在加载直播频道…")
                 case .failed(let message):
-                    ContentUnavailableView("直播加载失败", systemImage: "wifi.exclamationmark", description: Text(message))
+                    ContentUnavailableView {
+                        Label("直播加载失败", systemImage: "wifi.exclamationmark")
+                    } description: {
+                        Text(message)
+                    } actions: {
+                        Button("重试") {
+                            Task { await reloadSources() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 default:
                     if store.filteredChannels.isEmpty {
                         ContentUnavailableView("暂无频道", systemImage: "tv", description: Text("请选择其他直播源或分组。"))
@@ -42,51 +50,93 @@ struct LiveView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .task(id: appModel.session?.id) {
-            await store.loadSources(appModel: appModel)
+            await reloadSources()
         }
-        .fullScreenCover(item: $playerChannel) { channel in
-            LivePlayerSheet(channel: channel, epg: store.epg)
+        // Channel loading keys off the selection instead of the picker's
+        // onChange, so the first source assigned by loadSources also loads and
+        // a superseded load is cancelled rather than racing the new one.
+        .task(id: store.selectedSource?.id) {
+            guard let source = store.selectedSource else { return }
+            await store.loadChannels(
+                source: source,
+                isLocalMode: appModel.isLocalMode,
+                client: appModel.client
+            )
         }
     }
 
-    private func selectSource(_ source: LiveSource) {
-        Task { await store.loadChannels(source: source, appModel: appModel) }
+    private func reloadSources() async {
+        await store.loadSources(
+            isLocalMode: appModel.isLocalMode,
+            localSources: appModel.session?.localLiveSources ?? [],
+            client: appModel.client
+        )
     }
 
     private func open(_ channel: LiveChannel) {
-        playerChannel = channel
-        Task { await store.loadEPG(channel: channel, appModel: appModel) }
+        // Live and VOD share one fullScreenCover owned by MainSplitView.
+        coordinator.openLive(channel: channel, epg: store.epg)
+        Task {
+            await store.loadEPG(
+                channel: channel,
+                isLocalMode: appModel.isLocalMode,
+                client: appModel.client
+            )
+            coordinator.updateLiveEPG(store.epg)
+        }
     }
 }
 
 private struct LiveFilterBar: View {
     @Bindable var store: LiveStore
-    let sourceAction: (LiveSource) -> Void
 
     var body: some View {
-        HStack {
-            Picker("直播源", selection: $store.selectedSource) {
-                ForEach(store.sources) { source in
-                    Text(source.name).tag(Optional(source))
-                }
-            }
-            .onChange(of: store.selectedSource) { _, value in
-                if let value { sourceAction(value) }
-            }
-
-            Picker("分组", selection: $store.selectedGroup) {
-                Text("全部").tag(Optional<String>.none)
-                ForEach(store.groups, id: \.self) { group in
-                    Text(group).tag(Optional(group))
-                }
+        // Long Chinese source names squeeze a single row at compact and narrow
+        // iPad widths, so fall back to stacked rows.
+        ViewThatFits(in: .horizontal) {
+            HStack {
+                pickers
+                Spacer()
+                channelCount
             }
 
-            Spacer()
-            Text("\(store.filteredChannels.count) 个频道")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    pickers
+                }
+                HStack {
+                    Spacer()
+                    channelCount
+                }
+            }
         }
         .appSurface()
+    }
+
+    @ViewBuilder
+    private var pickers: some View {
+        Picker("直播源", selection: $store.selectedSource) {
+            ForEach(store.sources) { source in
+                Text(source.name).tag(Optional(source))
+            }
+        }
+        .lineLimit(1)
+
+        Picker("分组", selection: $store.selectedGroup) {
+            Text("全部").tag(Optional<String>.none)
+            ForEach(store.groups, id: \.self) { group in
+                Text(group).tag(Optional(group))
+            }
+        }
+        .lineLimit(1)
+    }
+
+    private var channelCount: some View {
+        Text("\(store.filteredChannels.count) 个频道")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .fixedSize()
     }
 }
 
@@ -110,54 +160,11 @@ private struct LiveChannelCard: View {
             Text(channel.name)
                 .font(.headline)
                 .lineLimit(2)
-            Text(channel.url)
+            Text("点击播放")
                 .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+                .foregroundStyle(AppTheme.accent)
         }
         .frame(maxWidth: .infinity, minHeight: 110, alignment: .leading)
         .appSurface()
-    }
-}
-
-private struct LivePlayerSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var player: AVPlayer
-
-    let channel: LiveChannel
-    let epg: EPGData?
-
-    init(channel: LiveChannel, epg: EPGData?) {
-        self.channel = channel
-        self.epg = epg
-        if let url = URL(string: channel.url) {
-            _player = State(initialValue: AVPlayer(url: url))
-        } else {
-            _player = State(initialValue: AVPlayer())
-        }
-    }
-
-    var body: some View {
-        ZStack(alignment: .top) {
-            Color.black.ignoresSafeArea()
-            VideoPlayer(player: player)
-                .ignoresSafeArea()
-            HStack {
-                Button("关闭", systemImage: "xmark") { dismiss() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.black.opacity(0.7))
-                VStack(alignment: .leading) {
-                    Text(channel.name).font(.headline)
-                    if let current = epg?.programs.first(where: \.isLive) {
-                        Text("\(current.timeRange) \(current.title)").font(.caption)
-                    }
-                }
-                .foregroundStyle(.white)
-                Spacer()
-            }
-            .padding()
-        }
-        .onAppear { player.play() }
-        .onDisappear { player.pause() }
     }
 }

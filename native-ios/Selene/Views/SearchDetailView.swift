@@ -5,6 +5,7 @@ struct SearchDetailView: View {
     @Environment(PlayerCoordinator.self) private var playerCoordinator
     @State private var store = SearchDetailStore()
     @State private var selectedSource: SearchResult?
+    @ScaledMetric(relativeTo: .largeTitle) private var posterWidth: CGFloat = 190
 
     let result: SearchResult
 
@@ -43,20 +44,22 @@ struct SearchDetailView: View {
         .background(AppBackground())
         .navigationTitle(result.title)
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: result.id) {
+        .task(id: result.uniqueKey) {
             guard let client = appModel.client else { return }
             await store.load(result: result, using: client)
             selectedSource = store.detail
         }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    toggleFavorite()
-                } label: {
-                    Label(
-                        isFavorite ? "取消收藏" : "收藏",
-                        systemImage: isFavorite ? "heart.fill" : "heart"
-                    )
+            if !appModel.isLocalMode {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        toggleFavorite()
+                    } label: {
+                        Label(
+                            isFavorite ? "取消收藏" : "收藏",
+                            systemImage: isFavorite ? "heart.fill" : "heart"
+                        )
+                    }
                 }
             }
         }
@@ -66,13 +69,13 @@ struct SearchDetailView: View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 24) {
                 RemotePosterView(urlString: displayedResult.poster)
-                    .frame(width: 190)
+                    .frame(width: posterWidth)
                 detailText
             }
 
             VStack(alignment: .leading, spacing: 18) {
                 RemotePosterView(urlString: displayedResult.poster)
-                    .frame(maxWidth: 190)
+                    .frame(maxWidth: posterWidth)
                 detailText
             }
         }
@@ -173,7 +176,7 @@ private struct SourcePickerSection: View {
                     .font(.title2.bold())
                 ScrollView(.horizontal) {
                     HStack {
-                        ForEach(sources) { source in
+                        ForEach(sources, id: \.uniqueKey) { source in
                             Button {
                                 action(source)
                             } label: {

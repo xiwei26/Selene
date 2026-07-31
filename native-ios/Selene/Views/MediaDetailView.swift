@@ -5,6 +5,8 @@ struct MediaDetailView: View {
     @State private var store = PlayableResourceStore()
     @State private var detailStore = MediaDetailStore()
     @State private var showsPoster = false
+    @ScaledMetric(relativeTo: .largeTitle) private var heroPosterWidth: CGFloat = 220
+    @ScaledMetric(relativeTo: .subheadline) private var recommendPosterWidth: CGFloat = 128
 
     let movie: DoubanMovie
 
@@ -28,11 +30,19 @@ struct MediaDetailView: View {
                         .frame(maxWidth: .infinity, minHeight: 140)
                         .appSurface()
                 case .failed(let message):
-                    ContentUnavailableView(
-                        "资源搜索失败",
-                        systemImage: "wifi.exclamationmark",
-                        description: Text(message)
-                    )
+                    ContentUnavailableView {
+                        Label("资源搜索失败", systemImage: "wifi.exclamationmark")
+                    } description: {
+                        Text(message)
+                    } actions: {
+                        Button("重试") {
+                            Task {
+                                guard let client = appModel.client else { return }
+                                await store.find(title: movie.title, using: client, force: true)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                     .appSurface()
                 case .loaded:
                     resourceList
@@ -58,13 +68,13 @@ struct MediaDetailView: View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 28) {
                 poster
-                    .frame(width: 220)
+                    .frame(width: heroPosterWidth)
                 metadata
             }
 
             VStack(alignment: .leading, spacing: 20) {
                 poster
-                    .frame(maxWidth: 220)
+                    .frame(maxWidth: heroPosterWidth)
                 metadata
             }
         }
@@ -113,7 +123,7 @@ struct MediaDetailView: View {
             Button {
                 Task {
                     guard let client = appModel.client else { return }
-                    await store.find(title: movie.title, using: client)
+                    await store.find(title: movie.title, using: client, force: true)
                 }
             } label: {
                 Label("查找播放资源", systemImage: "play.circle.fill")
@@ -179,11 +189,16 @@ struct MediaDetailView: View {
                                 ) {
                                     VStack(alignment: .leading, spacing: 7) {
                                         RemotePosterView(urlString: item.poster)
-                                            .frame(width: 128, height: 180)
+                                            // Height follows the scaled width so
+                                            // the poster keeps its 2:3 crop.
+                                            .frame(
+                                                width: recommendPosterWidth,
+                                                height: recommendPosterWidth * 180 / 128
+                                            )
                                         Text(item.title)
                                             .font(.subheadline.weight(.semibold))
                                             .lineLimit(2)
-                                            .frame(width: 128, alignment: .leading)
+                                            .frame(width: recommendPosterWidth, alignment: .leading)
                                         if let rate = item.rate, !rate.isEmpty {
                                             Label(rate, systemImage: "star.fill")
                                                 .font(.caption)
@@ -202,6 +217,21 @@ struct MediaDetailView: View {
             ProgressView("正在加载豆瓣详情…")
                 .frame(maxWidth: .infinity, minHeight: 80)
                 .appSurface()
+        } else if case .failed(let message) = detailStore.phase {
+            ContentUnavailableView {
+                Label("详情加载失败", systemImage: "wifi.exclamationmark")
+            } description: {
+                Text(message)
+            } actions: {
+                Button("重试") {
+                    Task {
+                        guard let client = appModel.client else { return }
+                        await detailStore.load(id: movie.id, using: client, force: true)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .appSurface()
         }
     }
 
@@ -226,7 +256,7 @@ struct MediaDetailView: View {
                 Text("可播放资源")
                     .font(.title2.bold())
 
-                ForEach(store.resources) { result in
+                ForEach(store.resources, id: \.uniqueKey) { result in
                     NavigationLink(value: result) {
                         SearchResultRow(result: result)
                             .appSurface()

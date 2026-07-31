@@ -38,9 +38,11 @@ struct PlatformFeatureView: View {
     let feature: PlatformFeature
 
     @State private var query = ""
+    @State private var submittedQuery = ""
     @State private var dramas: [SearchResult] = []
     @State private var platformItems: [MediaPlatformItem] = []
     @State private var phase: LoadPhase = .idle
+    @State private var openTask: Task<Void, Never>?
 
     var body: some View {
         ScrollView {
@@ -53,7 +55,16 @@ struct PlatformFeatureView: View {
                     platformItems: platformItems,
                     phase: phase,
                     dramaAction: openDrama,
-                    platformAction: openPlatformItem
+                    platformAction: openPlatformItem,
+                    retryAction: {
+                        Task {
+                            if submittedQuery.isEmpty {
+                                await loadInitial()
+                            } else {
+                                await runSearch()
+                            }
+                        }
+                    }
                 )
             }
             .padding(AppTheme.pagePadding)
@@ -63,14 +74,22 @@ struct PlatformFeatureView: View {
         .task(id: feature.rawValue) {
             await loadInitial()
         }
+        // Driving the search from the submitted query lets SwiftUI cancel the
+        // previous one, so a slow response cannot overwrite a newer result.
+        .task(id: submittedQuery) {
+            await runSearch()
+        }
+        .onDisappear {
+            openTask?.cancel()
+        }
     }
 
     private var searchBar: some View {
         HStack {
             TextField("搜索\(feature.title)", text: $query)
                 .textFieldStyle(.roundedBorder)
-                .onSubmit(search)
-            Button("搜索", systemImage: "magnifyingglass", action: search)
+                .onSubmit(submit)
+            Button("搜索", systemImage: "magnifyingglass", action: submit)
                 .buttonStyle(.borderedProminent)
                 .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || phase.isLoading)
         }
@@ -98,35 +117,44 @@ struct PlatformFeatureView: View {
         }
     }
 
-    private func search() {
+    private func submit() {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, let client = appModel.client else { return }
-        Task {
-            phase = .loading
-            do {
-                switch feature {
-                case .shortDrama:
-                    dramas = try await client.searchShortDramas(text)
-                case .bilibili:
-                    platformItems = try await client.searchBilibili(text)
-                case .youtube:
-                    platformItems = try await client.searchYouTube(text)
-                }
-                phase = .loaded
-            } catch {
-                phase = .failed(error.localizedDescription)
+        guard !text.isEmpty else { return }
+        submittedQuery = text
+    }
+
+    private func runSearch() async {
+        guard !submittedQuery.isEmpty, let client = appModel.client else { return }
+        let text = submittedQuery
+        phase = .loading
+        do {
+            switch feature {
+            case .shortDrama:
+                dramas = try await client.searchShortDramas(text)
+            case .bilibili:
+                platformItems = try await client.searchBilibili(text)
+            case .youtube:
+                platformItems = try await client.searchYouTube(text)
             }
+            phase = .loaded
+        } catch {
+            // A cancelled task has been superseded; its state is stale.
+            guard !Task.isCancelled else { return }
+            phase = .failed(error.localizedDescription)
         }
     }
 
     private func openDrama(_ drama: SearchResult) {
         guard let client = appModel.client else { return }
-        Task {
+        openTask?.cancel()
+        openTask = Task {
             do {
                 let detail = try await client.shortDramaDetail(id: drama.id, name: drama.title) ?? drama
+                guard !Task.isCancelled else { return }
                 playerCoordinator.sourceResults = [detail]
                 playerCoordinator.open(result: detail)
             } catch {
+                guard !Task.isCancelled else { return }
                 phase = .failed(error.localizedDescription)
             }
         }
@@ -146,6 +174,7 @@ private struct FeatureContent: View {
     let phase: LoadPhase
     let dramaAction: (SearchResult) -> Void
     let platformAction: (MediaPlatformItem) -> Void
+    let retryAction: () -> Void
 
     var body: some View {
         switch phase {
@@ -153,8 +182,15 @@ private struct FeatureContent: View {
             ProgressView("正在加载\(feature.title)…")
                 .frame(maxWidth: .infinity, minHeight: 240)
         case .failed(let message):
-            ContentUnavailableView("加载失败", systemImage: "exclamationmark.triangle", description: Text(message))
-                .frame(maxWidth: .infinity, minHeight: 240)
+            ContentUnavailableView {
+                Label("加载失败", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(message)
+            } actions: {
+                Button("重试", action: retryAction)
+                    .buttonStyle(.borderedProminent)
+            }
+            .frame(maxWidth: .infinity, minHeight: 240)
         case .loaded:
             if feature == .shortDrama {
                 dramaGrid
@@ -165,8 +201,8 @@ private struct FeatureContent: View {
     }
 
     private var dramaGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 145, maximum: 190), spacing: 16)], spacing: 20) {
-            ForEach(dramas) { drama in
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 16)], spacing: 20) {
+            ForEach(dramas, id: \.uniqueKey) { drama in
                 Button {
                     dramaAction(drama)
                 } label: {

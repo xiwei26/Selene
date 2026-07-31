@@ -18,13 +18,34 @@ struct HomeView: View {
                 case .idle, .loading:
                     loadingContent
                 case .failed(let message):
-                    ContentUnavailableView(
-                        "首页加载失败",
-                        systemImage: "wifi.exclamationmark",
-                        description: Text(message)
-                    )
+                    ContentUnavailableView {
+                        Label("首页加载失败", systemImage: "wifi.exclamationmark")
+                    } description: {
+                        Text(message)
+                    } actions: {
+                        Button("重试") {
+                            Task { await reload(force: true) }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                     .appSurface()
                 case .loaded:
+                    if !store.sectionWarnings.isEmpty {
+                        DisclosureGroup("\(store.sectionWarnings.count) 个分区未加载完整") {
+                            VStack(alignment: .leading, spacing: 4) {
+                                ForEach(store.sectionWarnings, id: \.self) { warning in
+                                    Text(warning)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 4)
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .appSurface()
+                    }
                     ContinueWatchingSection(records: appModel.playRecords, action: resume)
                     sections
                 }
@@ -34,12 +55,10 @@ struct HomeView: View {
             .frame(maxWidth: .infinity)
         }
         .refreshable {
-            guard let client = appModel.client else { return }
-            await store.load(using: client, force: true)
+            await reload(force: true)
         }
         .task(id: appModel.session?.id) {
-            guard let client = appModel.client else { return }
-            await store.load(using: client)
+            await reload(force: false)
         }
     }
 
@@ -94,8 +113,9 @@ struct HomeView: View {
                     LazyHStack(alignment: .top, spacing: 16) {
                         ForEach(movies.prefix(16)) { movie in
                             NavigationLink(value: movie) {
+                                // PosterCard sizes itself with @ScaledMetric so the
+                                // card grows with Dynamic Type instead of truncating.
                                 PosterCard(movie: movie)
-                                    .frame(width: 152)
                             }
                             .buttonStyle(.plain)
                         }
@@ -105,6 +125,11 @@ struct HomeView: View {
                 .scrollIndicators(.hidden)
             }
         }
+    }
+
+    private func reload(force: Bool) async {
+        guard let client = appModel.client else { return }
+        await store.load(using: client, force: force)
     }
 
     private func resume(_ record: PlayRecord) {
@@ -161,6 +186,7 @@ private struct ContinueWatchingSection: View {
 
 private struct BangumiSection: View {
     let items: [BangumiItem]
+    @ScaledMetric(relativeTo: .subheadline) private var posterWidth: CGFloat = 152
 
     var body: some View {
         if !items.isEmpty {
@@ -181,7 +207,7 @@ private struct BangumiSection: View {
                                         .foregroundStyle(.orange)
                                 }
                             }
-                            .frame(width: 152)
+                            .frame(width: posterWidth)
                         }
                     }
                 }

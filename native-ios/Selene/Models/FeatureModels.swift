@@ -109,6 +109,9 @@ struct PlayRecord: Identifiable, Codable, Hashable {
     var remarks: String? = nil
     var doubanID: Int? = nil
     var type: String? = nil
+    /// Stream URL of the episode in progress. A bare index resumes the wrong
+    /// episode once the backend list gains or loses entries.
+    var episodeURL: String? = nil
 
     var itemID: String { splitMediaKey(id).itemID }
     var episodeIndex: Int { max(index - 1, 0) }
@@ -138,7 +141,8 @@ struct PlayRecord: Identifiable, Codable, Hashable {
             searchTitle: data["search_title"] as? String ?? data["title"] as? String ?? "",
             remarks: data["remarks"] as? String,
             doubanID: flexibleInt(data["douban_id"]),
-            type: data["type"] as? String
+            type: data["type"] as? String,
+            episodeURL: data["episode_url"] as? String ?? data["episodeUrl"] as? String
         )
     }
 
@@ -156,7 +160,8 @@ struct PlayRecord: Identifiable, Codable, Hashable {
             "search_title": searchTitle,
             "remarks": remarks as Any,
             "douban_id": doubanID as Any,
-            "type": type as Any
+            "type": type as Any,
+            "episode_url": episodeURL as Any
         ]
     }
 

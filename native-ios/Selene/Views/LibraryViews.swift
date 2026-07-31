@@ -66,6 +66,8 @@ struct HistoryView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(PlayerCoordinator.self) private var playerCoordinator
 
+    @State private var showsClearConfirmation = false
+
     var body: some View {
         List {
             if appModel.playRecords.isEmpty {
@@ -102,10 +104,23 @@ struct HistoryView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("清空", systemImage: "trash", role: .destructive) {
-                    Task { await appModel.clearHistory() }
+                    showsClearConfirmation = true
                 }
                 .disabled(appModel.playRecords.isEmpty)
             }
+        }
+        // Clearing writes through to the server and cannot be undone.
+        .confirmationDialog(
+            "清空全部播放记录？",
+            isPresented: $showsClearConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("清空", role: .destructive) {
+                Task { await appModel.clearHistory() }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("服务器上的播放进度会一并删除，且无法恢复。")
         }
     }
 
@@ -120,10 +135,13 @@ private struct LibraryMediaRow: View {
     let poster: String
     let metadata: String
 
+    /// Grows the thumbnail alongside the row's text at larger Dynamic Type sizes.
+    @ScaledMetric(relativeTo: .headline) private var posterWidth: CGFloat = 68
+
     var body: some View {
         HStack(spacing: 14) {
             RemotePosterView(urlString: poster)
-                .frame(width: 68)
+                .frame(width: posterWidth)
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
                     .font(.headline)

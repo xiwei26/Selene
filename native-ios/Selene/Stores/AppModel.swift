@@ -31,7 +31,9 @@ final class AppModel {
         didSet { UserDefaults.standard.set(themeMode.rawValue, forKey: themeKey) }
     }
 
-    private let persistenceKey = "selene.native-ios.session"
+    /// Legacy UserDefaults key; only used to migrate older installs into Keychain.
+    private let legacyPersistenceKey = "selene.native-ios.session"
+    private let keychainAccount = "session"
     private let themeKey = "selene.native-ios.theme"
 
     init() {
@@ -67,7 +69,9 @@ final class AppModel {
         favorites = []
         playRecords = []
         searchHistory = []
-        UserDefaults.standard.removeObject(forKey: persistenceKey)
+        libraryError = nil
+        KeychainStore.delete(account: keychainAccount)
+        UserDefaults.standard.removeObject(forKey: legacyPersistenceKey)
     }
 
     func signInLocally(subscription: String) {
@@ -89,7 +93,7 @@ final class AppModel {
     }
 
     func refreshLibrary() async {
-        guard let client, session?.isLocalMode != true else { return }
+        guard let client = serverClient else { return }
         libraryError = nil
         async let favoritesRequest = client.favorites()
         async let recordsRequest = client.playRecords()
@@ -103,8 +107,18 @@ final class AppModel {
         }
     }
 
+    /// Server-backed library and admin routes are unavailable in local
+    /// subscription mode, where `client` points at a placeholder base URL.
+    var isLocalMode: Bool {
+        session?.isLocalMode == true
+    }
+
+    private var serverClient: LunaTVClient? {
+        isLocalMode ? nil : client
+    }
+
     func addFavorite(_ result: SearchResult) async {
-        guard let client else { return }
+        guard let client = serverClient else { return }
         do {
             try await client.addFavorite(result)
             favorites = try await client.favorites()
@@ -114,7 +128,7 @@ final class AppModel {
     }
 
     func removeFavorite(_ item: FavoriteItem) async {
-        guard let client else { return }
+        guard let client = serverClient else { return }
         do {
             try await client.removeFavorite(source: item.source, id: splitMediaKey(item.id).itemID)
             favorites.removeAll { $0.id == item.id }
@@ -124,7 +138,7 @@ final class AppModel {
     }
 
     func savePlayRecord(_ record: PlayRecord) async {
-        guard let client else { return }
+        guard let client = serverClient else { return }
         do {
             try await client.savePlayRecord(record)
             playRecords.removeAll { $0.id == record.id }
@@ -135,7 +149,7 @@ final class AppModel {
     }
 
     func clearHistory() async {
-        guard let client else { return }
+        guard let client = serverClient else { return }
         do {
             try await client.clearPlayRecords()
             playRecords = []
@@ -166,6 +180,12 @@ final class AppModel {
         }
     }
 
+    /// Clears both the shared URL cache and the dedicated poster disk/memory caches.
+    func clearCaches() {
+        URLCache.shared.removeAllCachedResponses()
+        PosterImageCache.shared.clear()
+    }
+
     var preferredColorScheme: ColorScheme? {
         switch themeMode {
         case .system: nil
@@ -181,14 +201,28 @@ final class AppModel {
             cookie: session.cookie
         )
         authenticationError = nil
+        // Never carry one account's library into another.
+        favorites = []
+        playRecords = []
+        searchHistory = []
+        libraryError = nil
 
         if let data = try? JSONEncoder().encode(session) {
-            UserDefaults.standard.set(data, forKey: persistenceKey)
+            try? KeychainStore.save(data: data, account: keychainAccount)
         }
+        // Drop any legacy plaintext copy left by older builds.
+        UserDefaults.standard.removeObject(forKey: legacyPersistenceKey)
     }
 
     private func restoreSession() {
-        guard let data = UserDefaults.standard.data(forKey: persistenceKey),
+        if let data = try? KeychainStore.load(account: keychainAccount),
+           let restored = try? JSONDecoder().decode(UserSession.self, from: data) {
+            install(restored)
+            return
+        }
+
+        // One-shot migration from pre-Keychain builds.
+        guard let data = UserDefaults.standard.data(forKey: legacyPersistenceKey),
               let restored = try? JSONDecoder().decode(UserSession.self, from: data) else {
             return
         }

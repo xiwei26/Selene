@@ -66,39 +66,55 @@ struct MainSplitView: View {
             default: nil
             }
         }
+
+        /// Server-backed destinations are hidden in Base58 local subscription mode.
+        var requiresServer: Bool {
+            switch self {
+            case .home, .movie, .tv, .anime, .show, .shortDrama, .bilibili, .youtube,
+                    .favorites, .history, .admin:
+                true
+            case .search, .live, .settings:
+                false
+            }
+        }
     }
 
     @Environment(AppModel.self) private var appModel
     @Environment(PlayerCoordinator.self) private var playerCoordinator
     @State private var selection: SidebarDestination? = .home
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var path = NavigationPath()
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             List(selection: $selection) {
                 Section {
-                    sidebarRow(.home)
+                    if shows(.home) { sidebarRow(.home) }
                     sidebarRow(.search)
                 }
 
                 Section("浏览") {
-                    sidebarRow(.movie)
-                    sidebarRow(.tv)
-                    sidebarRow(.anime)
-                    sidebarRow(.show)
+                    if shows(.movie) { sidebarRow(.movie) }
+                    if shows(.tv) { sidebarRow(.tv) }
+                    if shows(.anime) { sidebarRow(.anime) }
+                    if shows(.show) { sidebarRow(.show) }
                     sidebarRow(.live)
-                    sidebarRow(.shortDrama)
-                    sidebarRow(.bilibili)
-                    sidebarRow(.youtube)
+                    if shows(.shortDrama) { sidebarRow(.shortDrama) }
+                    if shows(.bilibili) { sidebarRow(.bilibili) }
+                    if shows(.youtube) { sidebarRow(.youtube) }
                 }
 
-                Section("片库") {
-                    sidebarRow(.favorites)
-                    sidebarRow(.history)
+                if !appModel.isLocalMode {
+                    Section("片库") {
+                        sidebarRow(.favorites)
+                        sidebarRow(.history)
+                    }
                 }
 
                 Section {
-                    sidebarRow(.admin)
+                    if shows(.admin) {
+                        sidebarRow(.admin)
+                    }
                     sidebarRow(.settings)
                 }
             }
@@ -106,7 +122,7 @@ struct MainSplitView: View {
             .navigationTitle("Selene")
             .navigationSplitViewColumnWidth(min: 210, ideal: 240, max: 300)
         } detail: {
-            NavigationStack {
+            NavigationStack(path: $path) {
                 ZStack {
                     AppBackground()
                     content
@@ -131,12 +147,30 @@ struct MainSplitView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
+        .onChange(of: selection) { _, _ in
+            // NavigationStack keeps pushed views when only the root content
+            // changes, which would leave a stale detail on screen.
+            path = NavigationPath()
+        }
+        .onChange(of: appModel.isLocalMode) { _, isLocal in
+            // Drop a server-only selection after switching into local mode.
+            if isLocal, let selection, selection.requiresServer {
+                self.selection = .search
+            }
+        }
         .task(id: appModel.session?.id) {
+            if appModel.isLocalMode, selection?.requiresServer == true {
+                selection = .search
+            }
             await appModel.refreshLibrary()
         }
         .fullScreenCover(isPresented: playbackPresentation) {
             PlaybackView()
         }
+    }
+
+    private func shows(_ destination: SidebarDestination) -> Bool {
+        !appModel.isLocalMode || !destination.requiresServer
     }
 
     private func sidebarRow(_ section: SidebarDestination) -> some View {
@@ -147,14 +181,18 @@ struct MainSplitView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch selection ?? .home {
+        switch selection ?? (appModel.isLocalMode ? .search : .home) {
         case .home:
             HomeView()
         case .search:
             SearchView()
         case .movie, .tv, .anime, .show:
             if let category = selection?.category {
+                // A multi-pattern case is one ViewBuilder branch, so all four
+                // categories share a structural slot. Without an explicit id the
+                // CategoryStore @State survives a switch and shows stale posters.
                 CategoryView(category: category)
+                    .id(category)
             }
         case .live:
             LiveView()
@@ -175,12 +213,15 @@ struct MainSplitView: View {
         }
     }
 
+    /// Single owner of playback teardown and VOD progress persistence.
     private var playbackPresentation: Binding<Bool> {
         Binding {
             playerCoordinator.isPlaying
         } set: { isPresented in
-            if !isPresented, playerCoordinator.isPlaying {
-                playerCoordinator.stop()
+            guard !isPresented, playerCoordinator.isPlaying else { return }
+            let record = playerCoordinator.stopAndMakeRecord()
+            if let record, !appModel.isLocalMode {
+                Task { await appModel.savePlayRecord(record) }
             }
         }
     }

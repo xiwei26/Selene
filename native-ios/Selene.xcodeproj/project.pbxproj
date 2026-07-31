@@ -10,9 +10,22 @@
 		A10000000000000000000001 /* Selene.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Selene.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A10000000000000000000010 /* Exceptions for "Selene" folder in "Selene" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Resources/Info.plist,
+			);
+			target = A10000000000000000000006 /* Selene */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A10000000000000000000002 /* Selene */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A10000000000000000000010 /* Exceptions for "Selene" folder in "Selene" target */,
+			);
 			path = Selene;
 			sourceTree = "<group>";
 		};
@@ -86,7 +99,7 @@
 				};
 			};
 			buildConfigurationList = A1000000000000000000000B /* Build configuration list for PBXProject "Selene" */;
-			developmentRegion = zh-Hans;
+			developmentRegion = "zh-Hans";
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				"zh-Hans",
@@ -287,20 +300,20 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A1000000000000000000000B /* Build configuration list for PBXProject "Selene" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				A1000000000000000000000C /* Debug */,
-				A1000000000000000000000D /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		A10000000000000000000007 /* Build configuration list for PBXNativeTarget "Selene" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A1000000000000000000000E /* Debug */,
 				A1000000000000000000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1000000000000000000000B /* Build configuration list for PBXProject "Selene" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1000000000000000000000C /* Debug */,
+				A1000000000000000000000D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

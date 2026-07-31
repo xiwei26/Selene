@@ -25,14 +25,23 @@ struct SearchView: View {
                     results: store.results,
                     completedSources: store.completedSources,
                     totalSources: store.totalSources,
-                    currentSource: store.currentSource
+                    currentSource: store.currentSource,
+                    warnings: store.sourceWarnings
                 )
             case .failed(let message):
-                ContentUnavailableView(
-                    "搜索失败",
-                    systemImage: "wifi.exclamationmark",
-                    description: Text(message)
-                )
+                ContentUnavailableView {
+                    Label("搜索失败", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(message)
+                } actions: {
+                    Button("重试") {
+                        // Re-trigger the submittedQuery task by bouncing the value.
+                        let query = store.submittedQuery
+                        store.submittedQuery = ""
+                        store.submittedQuery = query
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
             case .loaded:
                 if store.results.isEmpty {
                     ContentUnavailableView.search(text: store.submittedQuery)
@@ -66,13 +75,15 @@ struct SearchView: View {
         }
         .task(id: store.query) {
             guard let client = appModel.client else { return }
-            await store.loadSuggestions(using: client)
+            await store.loadSuggestions(using: client, isLocalMode: appModel.isLocalMode)
         }
         .task(id: store.submittedQuery) {
             guard let client = appModel.client, !store.submittedQuery.isEmpty else { return }
             await store.search(
                 using: client,
-                useStreaming: appModel.session?.isLocalMode != true
+                useStreaming: !appModel.isLocalMode,
+                isLocalMode: appModel.isLocalMode,
+                localResources: appModel.session?.localSearchResources ?? []
             )
             if !appModel.searchHistory.contains(store.submittedQuery) {
                 appModel.searchHistory.insert(store.submittedQuery, at: 0)
@@ -100,6 +111,14 @@ struct SearchView: View {
 
     @ViewBuilder
     private var resultList: some View {
+        VStack(spacing: 0) {
+            SourceWarningsView(warnings: store.sourceWarnings)
+            results
+        }
+    }
+
+    @ViewBuilder
+    private var results: some View {
         if store.isAggregating {
             List(store.filteredAggregates) { aggregate in
                 NavigationLink(value: aggregate.representative) {
@@ -116,7 +135,7 @@ struct SearchView: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
         } else {
-            List(store.filteredResults) { result in
+            List(store.filteredResults, id: \.uniqueKey) { result in
                 NavigationLink(value: result) {
                     SearchResultRow(result: result)
                 }
@@ -124,6 +143,31 @@ struct SearchView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+        }
+    }
+}
+
+/// Per-source SSE failures are recoverable: other sources still returned
+/// results, so this stays collapsed and secondary rather than interrupting.
+private struct SourceWarningsView: View {
+    let warnings: [String]
+
+    var body: some View {
+        if !warnings.isEmpty {
+            DisclosureGroup("\(warnings.count) 个片源未返回结果") {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(warnings, id: \.self) { warning in
+                        Text(warning)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
         }
     }
 }
@@ -185,6 +229,7 @@ private struct SearchProgressView: View {
     let completedSources: Int
     let totalSources: Int
     let currentSource: String?
+    let warnings: [String]
 
     var body: some View {
         VStack(spacing: 12) {
@@ -202,8 +247,10 @@ private struct SearchProgressView: View {
             }
             .padding(.horizontal)
 
+            SourceWarningsView(warnings: warnings)
+
             if !results.isEmpty {
-                List(results) { result in
+                List(results, id: \.uniqueKey) { result in
                     NavigationLink(value: result) {
                         SearchResultRow(result: result)
                     }

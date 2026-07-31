@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 enum Base58 {

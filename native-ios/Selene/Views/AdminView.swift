@@ -8,6 +8,13 @@ struct AdminView: View {
     @State private var bilibiliEnabled = false
     @State private var phase: LoadPhase = .idle
     @State private var savedMessage: String?
+    @State private var saveTask: Task<Void, Never>?
+
+    /// Writes are only meaningful once the config actually loaded; in local mode the
+    /// client points at a placeholder base URL, so a POST would go nowhere useful.
+    private var canEdit: Bool {
+        phase == .loaded && !appModel.isLocalMode
+    }
 
     var body: some View {
         Form {
@@ -33,12 +40,14 @@ struct AdminView: View {
                 Stepper("最大结果数：\(youtube.maxResults)", value: $youtube.maxResults, in: 5...50, step: 5)
                 Button("保存 YouTube 配置", action: saveYouTube)
             }
+            .disabled(!canEdit)
 
             Section("Bilibili") {
                 Toggle("启用 Bilibili", isOn: $bilibiliEnabled)
                 LabeledContent("登录状态", value: config?.bilibiliConfig?.loginStatus ?? "未知")
                 Button("保存 Bilibili 配置", action: saveBilibili)
             }
+            .disabled(!canEdit)
 
             Section("短剧") {
                 LabeledContent("主接口", value: config?.shortDramaConfig?.primaryApiUrl ?? "未配置")
@@ -59,7 +68,7 @@ struct AdminView: View {
     }
 
     private func load() async {
-        guard let client = appModel.client, appModel.session?.isLocalMode != true else {
+        guard let client = appModel.client, !appModel.isLocalMode else {
             phase = .failed("管理后台需要 LunaTV 服务器会话")
             return
         }
@@ -75,22 +84,33 @@ struct AdminView: View {
     }
 
     private func saveYouTube() {
-        Task {
-            do {
-                try await appModel.client?.saveYouTubeConfig(youtube)
-                savedMessage = "YouTube 配置已保存"
-            } catch {
-                phase = .failed(error.localizedDescription)
-            }
+        save(message: "YouTube 配置已保存") { client in
+            try await client.saveYouTubeConfig(youtube)
         }
     }
 
     private func saveBilibili() {
-        Task {
+        save(message: "Bilibili 配置已保存") { client in
+            try await client.saveBilibiliConfig(enabled: bilibiliEnabled)
+        }
+    }
+
+    /// Serializes admin writes: a second tap replaces the in-flight request instead
+    /// of racing it, so the last value the user chose is the one that lands.
+    private func save(
+        message: String,
+        write: @escaping @MainActor (LunaTVClient) async throws -> Void
+    ) {
+        guard canEdit, let client = appModel.client else { return }
+        saveTask?.cancel()
+        saveTask = Task {
             do {
-                try await appModel.client?.saveBilibiliConfig(enabled: bilibiliEnabled)
-                savedMessage = "Bilibili 配置已保存"
+                try await write(client)
+                guard !Task.isCancelled else { return }
+                savedMessage = message
             } catch {
+                // A superseded save must not overwrite the newer request's outcome.
+                guard !isCancellation(error) else { return }
                 phase = .failed(error.localizedDescription)
             }
         }
