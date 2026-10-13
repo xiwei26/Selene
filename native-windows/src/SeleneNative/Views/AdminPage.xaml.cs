@@ -1,11 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 using SeleneNative.Core.Services;
 using SeleneNative.Core.ViewModels;
-using Windows.System;
-using Windows.UI;
-using MH = Microsoft.UI;
 
 namespace SeleneNative.Views;
 
@@ -74,16 +70,14 @@ public sealed partial class AdminPage : UserControl
         {
             Spacing = 12,
             Padding = new Thickness(16),
-            Background = CardBrush(),
             CornerRadius = new CornerRadius(8),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255)),
             BorderThickness = new Thickness(1),
         };
 
         // Header
         panel.Children.Add(new TextBlock
         {
-            Text = "📺 YouTube 配置",
+            Text = "YouTube 配置",
             FontSize = 20,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
         });
@@ -91,7 +85,7 @@ public sealed partial class AdminPage : UserControl
         panel.Children.Add(new TextBlock
         {
             Text = "支持 YouTube 官方 API 或演示模式，让用户搜索和观看 YouTube 视频",
-            Foreground = SecondaryBrush(),
+            Tag = "SecondaryText",
             FontSize = 13,
             TextWrapping = TextWrapping.Wrap,
         });
@@ -111,7 +105,7 @@ public sealed partial class AdminPage : UserControl
 
         if (!_vm.YouTubeEnabled)
         {
-            return panel;
+            return ApplyTheme(panel);
         }
 
         // Demo mode toggle
@@ -130,7 +124,7 @@ public sealed partial class AdminPage : UserControl
         panel.Children.Add(new TextBlock
         {
             Text = "演示模式使用预设视频数据，无需 API 密钥。关闭后将使用真实的 YouTube API",
-            Foreground = SecondaryBrush(),
+            Tag = "SecondaryText",
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
         });
@@ -142,17 +136,18 @@ public sealed partial class AdminPage : UserControl
             {
                 Header = "YouTube API 密钥",
                 Password = _vm.YouTubeApiKey,
-                Width = 460,
+                MaxWidth = 640,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
             };
             apiKeyBox.PasswordChanged += (_, _) => _vm.YouTubeApiKey = apiKeyBox.Password;
-            panel.Children.Add(apiKeyBox);
+            AddField(panel, apiKeyBox);
 
             var hint = new StackPanel { Spacing = 4 };
             hint.Children.Add(new TextBlock
             {
-                Text = "💡 获取 API 密钥步骤：",
+                Text = "获取 API 密钥步骤：",
                 FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromArgb(255, 100, 150, 255)),
+                Tag = "SecondaryText",
             });
             hint.Children.Add(new HyperlinkButton
             {
@@ -160,7 +155,7 @@ public sealed partial class AdminPage : UserControl
                 NavigateUri = new Uri("https://console.cloud.google.com/"),
                 FontSize = 12,
             });
-            hint.Children.Add(new TextBlock { Text = "2. 创建新项目 → 启用 YouTube Data API v3 → 创建 API 密钥", FontSize = 12, Foreground = SecondaryBrush() });
+            hint.Children.Add(new TextBlock { Text = "2. 创建新项目 → 启用 YouTube Data API v3 → 创建 API 密钥", FontSize = 12, Tag = "SecondaryText" });
             panel.Children.Add(hint);
         }
 
@@ -172,10 +167,11 @@ public sealed partial class AdminPage : UserControl
             Minimum = 1,
             Maximum = 50,
             SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
-            Width = 200,
+            MaxWidth = 240,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
         };
         maxResultsBox.ValueChanged += (_, _) => _vm.YouTubeMaxResults = (int)maxResultsBox.Value;
-        panel.Children.Add(maxResultsBox);
+        AddField(panel, maxResultsBox);
 
         // Regions
         panel.Children.Add(new TextBlock
@@ -238,11 +234,7 @@ public sealed partial class AdminPage : UserControl
         {
             Content = "保存 YouTube 配置",
             HorizontalAlignment = HorizontalAlignment.Left,
-            Background = new SolidColorBrush(Color.FromArgb(255, 220, 38, 38)),
-            Foreground = new SolidColorBrush(MH.Colors.White),
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Padding = new Thickness(16, 6, 16, 6),
-            CornerRadius = new CornerRadius(6),
+            Style = (Style)Application.Current.Resources["AccentButtonStyle"],
         };
         saveBtn.Click += async (_, _) =>
         {
@@ -251,7 +243,7 @@ public sealed partial class AdminPage : UserControl
         };
         panel.Children.Add(saveBtn);
 
-        return panel;
+        return ApplyTheme(panel);
     }
 
     private UIElement BuildBilibiliSection()
@@ -260,15 +252,13 @@ public sealed partial class AdminPage : UserControl
         {
             Spacing = 12,
             Padding = new Thickness(16),
-            Background = CardBrush(),
             CornerRadius = new CornerRadius(8),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255)),
             BorderThickness = new Thickness(1),
         };
 
         panel.Children.Add(new TextBlock
         {
-            Text = "📺 Bilibili 配置",
+            Text = "Bilibili 配置",
             FontSize = 20,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
         });
@@ -276,7 +266,7 @@ public sealed partial class AdminPage : UserControl
         panel.Children.Add(new TextBlock
         {
             Text = "搜索 B站视频和番剧，使用 iframe 播放器，自动处理 Wbi 签名",
-            Foreground = SecondaryBrush(),
+            Tag = "SecondaryText",
             FontSize = 13,
             TextWrapping = TextWrapping.Wrap,
         });
@@ -287,9 +277,9 @@ public sealed partial class AdminPage : UserControl
             var loginInfo = new StackPanel { Spacing = 4 };
             loginInfo.Children.Add(new TextBlock
             {
-                Text = $"✅ 已登录：{_vm.BilibiliUserInfo.Username} (UID: {_vm.BilibiliUserInfo.Mid})",
+                Text = $"已登录：{_vm.BilibiliUserInfo.Username} (UID: {_vm.BilibiliUserInfo.Mid})",
                 FontSize = 13,
-                Foreground = new SolidColorBrush(Color.FromArgb(255, 34, 197, 94)),
+                Tag = "SecondaryText",
             });
             if (_vm.BilibiliUserInfo.IsVip)
             {
@@ -297,7 +287,7 @@ public sealed partial class AdminPage : UserControl
                 {
                     Text = "大会员",
                     FontSize = 12,
-                    Foreground = new SolidColorBrush(Color.FromArgb(255, 236, 72, 153)),
+                    Tag = "SecondaryText",
                 });
             }
             panel.Children.Add(loginInfo);
@@ -306,9 +296,9 @@ public sealed partial class AdminPage : UserControl
         {
             panel.Children.Add(new TextBlock
             {
-                Text = "🔐 未登录 B站账号（可选，登录后搜索结果更完整）",
+                Text = "未登录 B站账号（可选，登录后搜索结果更完整）",
                 FontSize = 13,
-                Foreground = SecondaryBrush(),
+                Tag = "SecondaryText",
             });
         }
 
@@ -326,11 +316,7 @@ public sealed partial class AdminPage : UserControl
         {
             Content = "保存 Bilibili 配置",
             HorizontalAlignment = HorizontalAlignment.Left,
-            Background = new SolidColorBrush(Color.FromArgb(255, 219, 39, 119)),
-            Foreground = new SolidColorBrush(MH.Colors.White),
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Padding = new Thickness(16, 6, 16, 6),
-            CornerRadius = new CornerRadius(6),
+            Style = (Style)Application.Current.Resources["AccentButtonStyle"],
         };
         saveBtn.Click += async (_, _) =>
         {
@@ -339,10 +325,41 @@ public sealed partial class AdminPage : UserControl
         };
         panel.Children.Add(saveBtn);
 
+        return ApplyTheme(panel);
+    }
+
+    private static void AddField(Panel panel, FrameworkElement field)
+    {
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(1, GridUnitType.Star),
+            MaxWidth = field.MaxWidth,
+        });
+        row.Children.Add(field);
+        panel.Children.Add(row);
+    }
+
+    private static StackPanel ApplyTheme(StackPanel panel)
+    {
+        UiHelpers.SetThemeResource(panel, StackPanel.BackgroundProperty, "CardBackgroundFillColorDefaultBrush");
+        UiHelpers.SetThemeResource(panel, StackPanel.BorderBrushProperty, "CardStrokeColorDefaultBrush");
+        ApplyTextTheme(panel);
         return panel;
     }
 
-    private static Brush CardBrush() => new SolidColorBrush(Color.FromArgb(255, 22, 29, 22));
-
-    private static Brush SecondaryBrush() => new SolidColorBrush(Color.FromArgb(255, 187, 203, 186));
+    private static void ApplyTextTheme(Panel panel)
+    {
+        foreach (var child in panel.Children)
+        {
+            if (child is TextBlock text && text.Tag as string == "SecondaryText")
+            {
+                UiHelpers.SetThemeResource(text, TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+            }
+            else if (child is Panel nested)
+            {
+                ApplyTextTheme(nested);
+            }
+        }
+    }
 }

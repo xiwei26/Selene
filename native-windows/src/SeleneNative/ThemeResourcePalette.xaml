@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="SeleneNative.ThemeResourcePalette"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- These noninteractive probes inherit the shell's theme. Their native
+         dependency properties are binding sources for controls built in C#. -->
+    <Grid>
+        <Border x:Name="LayerSurface" Background="{ThemeResource LayerFillColorDefaultBrush}" />
+        <Border x:Name="CardSurface" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+        <Border x:Name="CardStroke" Background="{ThemeResource CardStrokeColorDefaultBrush}" />
+        <Border x:Name="SecondarySurface" Background="{ThemeResource ControlFillColorSecondaryBrush}" />
+        <Border x:Name="PrimaryText" Background="{ThemeResource TextFillColorPrimaryBrush}" />
+        <Border x:Name="SecondaryText" Background="{ThemeResource TextFillColorSecondaryBrush}" />
+    </Grid>
+</UserControl>

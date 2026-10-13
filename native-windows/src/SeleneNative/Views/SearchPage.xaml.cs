@@ -1,9 +1,9 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 using SeleneNative.Core.Models;
 using SeleneNative.Core.Services;
 using SeleneNative.Core.ViewModels;
+using Windows.System;
 
 namespace SeleneNative.Views;
 
@@ -13,228 +13,200 @@ public sealed partial class SearchPage : UserControl
     private IContentProvider? _provider;
     private string? _serverUrl;
     private string? _cookie;
+    private bool _updatingControls;
+    private bool _searching;
 
     public event Action<SearchResult, IContentProvider?>? DetailRequested;
 
     public SearchPage()
     {
         InitializeComponent();
+        SearchButton.Click += async (_, _) => await SearchAndRenderAsync(QueryBox.Text);
+        QueryBox.KeyDown += async (_, e) =>
+        {
+            if (e.Key != VirtualKey.Enter) return;
+            e.Handled = true;
+            await SearchAndRenderAsync(QueryBox.Text);
+        };
+        AggregateButton.Click += (_, _) =>
+        {
+            _vm?.ToggleAggregate();
+            RenderResults();
+        };
+        SourceBox.SelectionChanged += (_, _) =>
+        {
+            if (_updatingControls || _vm is null) return;
+            _vm.SourceFilter = (SourceBox.SelectedItem as ComboBoxItem)?.Tag as string;
+            RenderResults();
+        };
+        YearBox.SelectionChanged += (_, _) =>
+        {
+            if (_updatingControls || _vm is null) return;
+            _vm.YearFilter = YearBox.SelectedIndex > 0 ? YearBox.SelectedItem?.ToString() : null;
+            RenderResults();
+        };
+        BlockedBox.TextChanged += (_, _) =>
+        {
+            if (_updatingControls || _vm is null) return;
+            _vm.BlockedKeywordsText = BlockedBox.Text;
+            RenderResults();
+        };
+        ClearFiltersButton.Click += (_, _) =>
+        {
+            if (_vm is null) return;
+            _vm.ClearFilters();
+            RefreshFilters();
+            RenderResults();
+        };
     }
 
     public void Build(SearchViewModel viewModel, IContentProvider? provider, string? serverUrl = null, string? cookie = null)
     {
+        if (_vm is not null) _vm.PropertyChanged -= OnViewModelPropertyChanged;
         _vm = viewModel;
         _provider = provider;
         _serverUrl = serverUrl;
         _cookie = cookie;
-        Render();
+        _vm.PropertyChanged += OnViewModelPropertyChanged;
+        RefreshFilters();
+        RenderHistory();
+        RenderStatus();
+        RenderResults();
     }
 
     public async Task SearchAndRenderAsync(string query)
     {
-        if (_vm is null || _provider is null) return;
-        if (string.IsNullOrWhiteSpace(query)) return;
-        
-        if (!string.IsNullOrWhiteSpace(_serverUrl))
+        if (_vm is null || _searching || string.IsNullOrWhiteSpace(query)) return;
+        QueryBox.Text = query.Trim();
+        _searching = true;
+        SearchButton.IsEnabled = false;
+        ResultsStack.Children.Clear();
+        try
         {
-            await _vm.SearchWithSSEAsync(_provider, _serverUrl, _cookie ?? "", query);
-        }
-        else
-        {
-            await _vm.SearchAsync(_provider, query);
-        }
-        Render();
-    }
-
-    private void Render()
-    {
-        if (_vm is null) return;
-        LeftPanel.Children.Clear();
-        RightPanel.Children.Clear();
-
-        // Header
-        LeftPanel.Children.Add(UiHelpers.PageHeader("搜索", "服务端聚合搜索 (SSE)"));
-
-        if (!string.IsNullOrWhiteSpace(_vm.ErrorMessage))
-        {
-            LeftPanel.Children.Add(UiHelpers.InfoBar("错误", _vm.ErrorMessage, InfoBarSeverity.Error));
-        }
-
-        // Search box
-        var queryBox = new TextBox { PlaceholderText = "输入片名、剧名或关键词", Width = 420 };
-        var searchButton = new Button { Content = "搜索" };
-        var sseToggle = new ToggleSwitch { Header = "SSE 流式搜索", IsOn = true, Margin = new Thickness(12, 0, 0, 0) };
-
-        searchButton.Click += async (_, _) =>
-        {
-            searchButton.IsEnabled = false;
-            if (sseToggle.IsOn && _provider is not null && !string.IsNullOrWhiteSpace(_serverUrl))
+            if (StreamingToggle.IsOn && _provider is not null && !string.IsNullOrWhiteSpace(_serverUrl))
             {
-                await _vm.SearchWithSSEAsync(_provider, _serverUrl, _cookie ?? "", queryBox.Text);
+                await _vm.SearchWithSSEAsync(_provider, _serverUrl, _cookie ?? "", QueryBox.Text);
             }
             else
             {
-                await _vm.SearchAsync(_provider, queryBox.Text);
+                await _vm.SearchAsync(_provider, QueryBox.Text);
             }
-            searchButton.IsEnabled = true;
-            Render();
-        };
-
-        LeftPanel.Children.Add(new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 10,
-            Children = { queryBox, searchButton, sseToggle },
-        });
-
-        // SSE progress
-        if (_vm.SseProgress is not null && !_vm.SseProgress.IsComplete)
-        {
-            var progressBar = new ProgressBar
-            {
-                Value = _vm.SseProgress.ProgressPercentage * 100,
-                Maximum = 100,
-                Height = 6,
-            };
-            var progressText = new TextBlock
-            {
-                Text = $"正在搜索: {_vm.SseProgress.CompletedSources}/{_vm.SseProgress.TotalSources} 源",
-                FontSize = 12,
-                Foreground = UiHelpers.SecondaryBrush(),
-            };
-            LeftPanel.Children.Add(new StackPanel { Spacing = 4, Children = { progressText, progressBar } });
         }
-
-        // Filter bar
-        var filterBar = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 4, 0, 0) };
-        var aggButton = new Button { Content = _vm.IsAggregating ? "列表" : "聚合" };
-        aggButton.Click += (_, _) => { _vm.ToggleAggregate(); Render(); };
-        filterBar.Children.Add(aggButton);
-
-        if (_vm.AvailableSources.Count > 1)
+        finally
         {
-            var sourceBox = new ComboBox { PlaceholderText = "来源", Width = 120 };
-            sourceBox.Items.Add("全部");
-            foreach (var s in _vm.AvailableSources) sourceBox.Items.Add(s);
-            sourceBox.SelectedIndex = 0;
-            sourceBox.SelectionChanged += (_, _) =>
-            {
-                _vm.SourceFilter = sourceBox.SelectedIndex > 0 ? sourceBox.SelectedItem?.ToString() : null;
-                Render();
-            };
-            filterBar.Children.Add(sourceBox);
+            _searching = false;
+            SearchButton.IsEnabled = true;
+            RefreshFilters();
+            RenderHistory();
+            RenderStatus();
+            RenderResults();
         }
+    }
 
-        if (_vm.AvailableYears.Count > 1)
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(SearchViewModel.IsLoading) or nameof(SearchViewModel.SseProgress) or nameof(SearchViewModel.ErrorMessage))
         {
-            var yearBox = new ComboBox { PlaceholderText = "年份", Width = 100 };
-            yearBox.Items.Add("全部");
-            foreach (var y in _vm.AvailableYears) yearBox.Items.Add(y);
-            yearBox.SelectedIndex = 0;
-            yearBox.SelectionChanged += (_, _) =>
-            {
-                _vm.YearFilter = yearBox.SelectedIndex > 0 ? yearBox.SelectedItem?.ToString() : null;
-                Render();
-            };
-            filterBar.Children.Add(yearBox);
+            DispatcherQueue.TryEnqueue(RenderStatus);
         }
+    }
 
-        var clearButton = new Button { Content = "清除筛选" };
-        clearButton.Click += (_, _) => { _vm.ClearFilters(); Render(); };
-        filterBar.Children.Add(clearButton);
-        LeftPanel.Children.Add(filterBar);
+    private void RenderStatus()
+    {
+        if (_vm is null) return;
+        ErrorBar.IsOpen = !string.IsNullOrWhiteSpace(_vm.ErrorMessage);
+        ErrorBar.Message = _vm.ErrorMessage ?? string.Empty;
+        ProgressPanel.Visibility = _vm.IsLoading ? Visibility.Visible : Visibility.Collapsed;
+        SearchProgress.IsIndeterminate = _vm.SseProgress is null || _vm.SseProgress.TotalSources <= 0;
+        SearchProgress.Value = (_vm.SseProgress?.ProgressPercentage ?? 0) * 100;
+        ProgressText.Text = _vm.SseProgress is { TotalSources: > 0 } progress
+            ? $"正在搜索：{progress.CompletedSources}/{progress.TotalSources} 个来源"
+            : "正在搜索…";
+    }
 
-        // Blocked keywords
-        var blockedBox = new TextBox { PlaceholderText = "屏蔽关键词 (逗号分隔)", Width = 300 };
-        blockedBox.TextChanged += (_, _) =>
+    private void RefreshFilters()
+    {
+        if (_vm is null) return;
+        _updatingControls = true;
+        try
         {
-            _vm.BlockedKeywordsText = blockedBox.Text;
-            Render();
-        };
-        LeftPanel.Children.Add(blockedBox);
-
-        // History chips
-        if (_vm.History.Count > 0)
-        {
-            var historyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            historyRow.Children.Add(new TextBlock { Text = "历史:", VerticalAlignment = VerticalAlignment.Center, FontSize = 12 });
-            foreach (var h in _vm.History.Take(8))
+            SourceBox.Items.Clear();
+            var allSources = new ComboBoxItem { Content = "全部来源" };
+            SourceBox.Items.Add(allSources);
+            SourceBox.SelectedItem = allSources;
+            foreach (var source in _vm.Results.GroupBy(result => result.Source).OrderBy(group => group.First().SourceName))
             {
-                var chip = new HyperlinkButton { Content = h, FontSize = 12 };
-                chip.Click += (_, _) =>
-                {
-                    queryBox.Text = h;
-                    searchButton.IsEnabled = false;
-                    _ = _vm.SearchAsync(_provider, h).ContinueWith(_ =>
-                    {
-                        DispatcherQueue.TryEnqueue(() => { searchButton.IsEnabled = true; Render(); });
-                    });
-                };
-                historyRow.Children.Add(chip);
+                var item = new ComboBoxItem { Content = source.First().SourceName, Tag = source.Key };
+                SourceBox.Items.Add(item);
+                if (source.Key == _vm.SourceFilter) SourceBox.SelectedItem = item;
             }
-            LeftPanel.Children.Add(historyRow);
+            if (SourceBox.SelectedIndex == 0) _vm.SourceFilter = null;
+            YearBox.Items.Clear();
+            YearBox.Items.Add("全部年份");
+            foreach (var year in _vm.AvailableYears) YearBox.Items.Add(year);
+            YearBox.SelectedItem = _vm.YearFilter is { } filter && YearBox.Items.Contains(filter) ? filter : "全部年份";
+            if (YearBox.SelectedIndex == 0) _vm.YearFilter = null;
+            BlockedBox.Text = _vm.BlockedKeywordsText;
         }
+        finally
+        {
+            _updatingControls = false;
+        }
+    }
 
-        // Results list
+    private void RenderHistory()
+    {
+        HistoryRow.Children.Clear();
+        if (_vm is null || _vm.History.Count == 0) return;
+        HistoryRow.Children.Add(new TextBlock { Text = "最近搜索", VerticalAlignment = VerticalAlignment.Center });
+        foreach (var query in _vm.History.Take(8))
+        {
+            var chip = new HyperlinkButton { Content = query };
+            chip.Click += async (_, _) => await SearchAndRenderAsync(query);
+            HistoryRow.Children.Add(chip);
+        }
+    }
+
+    private void RenderResults()
+    {
+        if (_vm is null || _searching) return;
+        ResultsStack.Children.Clear();
+        AggregateButton.Content = _vm.IsAggregating ? "显示列表" : "合并同名内容";
+        var results = _vm.FilteredResults;
         if (_vm.IsAggregating)
         {
-            foreach (var agg in _vm.FilteredAggregatedResults)
+            foreach (var aggregate in AggregatedSearchResult.RebuildAggregates(results))
             {
-                var card = CreateAggregateCard(agg);
-                LeftPanel.Children.Add(card);
+                ResultsStack.Children.Add(CreateAggregateCard(aggregate));
             }
         }
         else
         {
-            foreach (var result in _vm.FilteredResults)
-            {
-                var card = CreateResultCard(result);
-                LeftPanel.Children.Add(card);
-            }
+            foreach (var result in results) ResultsStack.Children.Add(CreateResultCard(result));
         }
-
-        if (_vm.Results.Count == 0 && !_vm.IsLoading)
+        if (results.Count == 0 && !_vm.IsLoading)
         {
-            LeftPanel.Children.Add(UiHelpers.EmptyState("暂无搜索结果", "尝试输入片名或关键词。"));
+            ResultsStack.Children.Add(_vm.Results.Count == 0
+                ? UiHelpers.EmptyState("暂无搜索结果", "输入片名或关键词开始搜索。")
+                : UiHelpers.EmptyState("没有符合筛选的结果", "调整来源、年份或屏蔽关键词。"));
         }
-
-        // Right panel placeholder
-        RightPanel.Children.Add(UiHelpers.PageHeader("详情", "点击左侧结果查看详情"));
     }
 
     private UIElement CreateResultCard(SearchResult result)
     {
         var row = UiHelpers.Row(result.Title, $"{result.SourceName}  {result.Year}  {result.TypeName}".Trim());
-        var detailBtn = new Button { Content = "详情" };
-        detailBtn.Click += (_, _) => DetailRequested?.Invoke(result, _provider);
-        row.Children.Add(detailBtn);
+        var detailButton = new Button { Content = "查看详情" };
+        detailButton.Click += (_, _) => DetailRequested?.Invoke(result, _provider);
+        row.Children.Add(detailButton);
         return row;
     }
 
-    private UIElement CreateAggregateCard(AggregatedSearchResult agg)
+    private UIElement CreateAggregateCard(AggregatedSearchResult aggregate)
     {
-        var panel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 0, 8) };
-        panel.Children.Add(new TextBlock
-        {
-            Text = agg.Title,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        });
-        panel.Children.Add(new TextBlock
-        {
-            Text = $"{agg.Year}  {agg.TypeName}  ({agg.OriginalResults.Count} 源)",
-            Foreground = UiHelpers.SecondaryBrush(),
-            FontSize = 12,
-        });
-        var detailBtn = new Button { Content = "详情", HorizontalAlignment = HorizontalAlignment.Left };
-        detailBtn.Click += (_, _) =>
-        {
-            if (agg.OriginalResults.Count > 0)
-            {
-                DetailRequested?.Invoke(agg.OriginalResults[0], _provider);
-            }
-        };
-        panel.Children.Add(detailBtn);
-        return panel;
+        var row = UiHelpers.Row(aggregate.Title, $"{aggregate.Year}  {aggregate.TypeName}  {aggregate.OriginalResults.Count} 个来源".Trim());
+        var detailButton = new Button { Content = "查看详情" };
+        detailButton.Click += (_, _) => DetailRequested?.Invoke(aggregate.OriginalResults[0], _provider);
+        row.Children.Add(detailButton);
+        return row;
     }
 }

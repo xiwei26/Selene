@@ -119,12 +119,13 @@ public sealed partial class LivePage : UserControl
         {
             var isLive = now >= program.StartTime && now < program.EndTime;
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            row.Children.Add(new TextBlock
+            var timeLabel = new TextBlock
             {
                 Text = $"{program.StartTime:HH:mm}-{program.EndTime:HH:mm}",
                 FontSize = 12,
-                Foreground = UiHelpers.SecondaryBrush(),
-            });
+            };
+            UiHelpers.SetThemeResource(timeLabel, TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+            row.Children.Add(timeLabel);
             row.Children.Add(new TextBlock
             {
                 Text = program.Title,

@@ -22,16 +22,16 @@ public sealed partial class HomePage : UserControl
         ContentStack.Children.Clear();
 
         var loginVm = App.Services.GetService(typeof(LoginViewModel)) as LoginViewModel;
-        var username = loginVm?.Session?.Username ?? "xiwei26";
-        ContentStack.Children.Add(UiHelpers.CreateGreetingBanner(username));
+        var username = loginVm?.Session?.Username;
+        ContentStack.Children.Add(UiHelpers.PageHeader("首页",
+            string.IsNullOrWhiteSpace(username) ? "发现热门影视，继续上次观看。" : $"欢迎回来，{username}。",
+            viewModel.IsLoading));
 
-        if (viewModel.HotMovies != null && viewModel.HotMovies.Any())
+        if (viewModel.HotMovies.Any())
         {
             var featured = viewModel.HotMovies.First();
-            ContentStack.Children.Add(UiHelpers.CreateHeroSection(featured,
-                () => DoubanMovieClicked?.Invoke(featured, "movie"),
-                () => DoubanMovieClicked?.Invoke(featured, "movie")
-            ));
+            ContentStack.Children.Add(UiHelpers.CreateRecommendationPanel(featured,
+                () => DoubanMovieClicked?.Invoke(featured, "movie")));
         }
 
         if (!string.IsNullOrWhiteSpace(viewModel.ErrorMessage))
