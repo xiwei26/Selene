@@ -2,7 +2,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Windows.Graphics;
 using Windows.UI;
 using System.Linq;
 using SeleneNative.Core.Models;
@@ -22,7 +24,7 @@ public sealed partial class MainWindow : Window
     private int _navigationGeneration;
 
     private readonly PlayerViewModel _playerViewModel;
-    private readonly IPlayRecordStore _playRecordStore;
+    private readonly PlayRecordPersistence _recordPersistence;
     private readonly DetailViewModel _detailViewModel;
     private readonly CategoryViewModel _categoryViewModel;
     private readonly IDoubanClient _doubanClient;
@@ -40,6 +42,16 @@ public sealed partial class MainWindow : Window
     private DetailPage _detailPage = null!;
     private PlayerPage _playerPage = null!;
     private AdminPage _adminPage = null!;
+
+    // Full screen is owned by the window; the player page only asks for it.
+    private bool _isPlayerFullScreen;
+    private AppWindowPresenterKind _restorePresenterKind = AppWindowPresenterKind.Default;
+    private OverlappedPresenterState _restoreWindowState = OverlappedPresenterState.Restored;
+    private PointInt32 _restorePosition;
+    private SizeInt32 _restoreSize;
+    private bool _restorePaneOpen;
+    private bool _closeRequested;
+    private bool _closeConfirmed;
 
     public HomeViewModel Home { get; }
     public LoginViewModel Login { get; }
@@ -64,7 +76,8 @@ public sealed partial class MainWindow : Window
         _playerViewModel = _services.GetRequiredService<PlayerViewModel>();
         _detailViewModel = _services.GetRequiredService<DetailViewModel>();
         _categoryViewModel = _services.GetRequiredService<CategoryViewModel>();
-        _playRecordStore = _services.GetRequiredService<IPlayRecordStore>();
+        _recordPersistence = new PlayRecordPersistence(_services.GetRequiredService<IPlayRecordStore>());
+        _playerViewModel.RecordSaver = SavePlayRecordAsync;
         _doubanClient = _services.GetRequiredService<IDoubanClient>();
         _bangumiClient = _services.GetRequiredService<IBangumiClient>();
         _themeService = _services.GetRequiredService<IThemeService>();
@@ -82,6 +95,9 @@ public sealed partial class MainWindow : Window
         Root.ActualThemeChanged += OnActualThemeChanged;
         AppTitleBar.Loaded += OnTitleBarLoaded;
         AppTitleBar.PaneToggleRequested += OnPaneToggleRequested;
+        Root.PreviewKeyDown += OnRootPreviewKeyDown;
+        AppWindow.Closing += OnAppWindowClosing;
+        AppWindow.Changed += OnAppWindowChanged;
         Closed += OnWindowClosed;
         Activated += OnFirstActivated;
     }
@@ -102,7 +118,8 @@ public sealed partial class MainWindow : Window
         _adminPage = new AdminPage();
         _playerPage.Bind(_playerViewModel);
         _playerPage.CloseRequested += OnPlayerCloseRequested;
-        _playerPage.SaveRecordRequested += OnPlayerSaveRecordAsync;
+        _playerPage.FullScreenRequested += OnPlayerFullScreenRequested;
+        _playerPage.Left += OnPlayerPageLeft;
         _detailPage.PlayRequested += OnPlayEpisodeAsync;
         _homePage.PlayRecordClicked += OnHomePlayRecordClicked;
         _homePage.DoubanMovieClicked += OnHomeDoubanMovieClicked;
@@ -270,8 +287,190 @@ public sealed partial class MainWindow : Window
         Root.ActualThemeChanged -= OnActualThemeChanged;
         AppTitleBar.Loaded -= OnTitleBarLoaded;
         AppTitleBar.PaneToggleRequested -= OnPaneToggleRequested;
+        Root.PreviewKeyDown -= OnRootPreviewKeyDown;
+        AppWindow.Closing -= OnAppWindowClosing;
+        AppWindow.Changed -= OnAppWindowChanged;
         Activated -= OnFirstActivated;
         Closed -= OnWindowClosed;
+    }
+
+    /// <summary>
+    /// Closing waits for the playback record. The record is snapshotted and
+    /// playback stopped at once; the window goes away when the write has finished,
+    /// instead of leaving a write behind in a process that is already exiting.
+    /// </summary>
+    private async void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        if (_closeConfirmed) return;
+
+        var saving = LeavePlayer();
+        if (saving.IsCompleted) return;
+
+        args.Cancel = true;
+        if (_closeRequested) return;
+        _closeRequested = true;
+
+        // The local copy is written first, so this bound only limits a slow server.
+        await Task.WhenAny(saving, Task.Delay(TimeSpan.FromSeconds(5)));
+        _closeConfirmed = true;
+        Close();
+    }
+
+    private void OnAppWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
+    {
+        // Something other than the player (for example a system shortcut) left full screen.
+        if (args.DidPresenterChange &&
+            _isPlayerFullScreen &&
+            sender.Presenter.Kind != AppWindowPresenterKind.FullScreen)
+        {
+            _isPlayerFullScreen = false;
+            ApplyFullScreenChrome(false);
+        }
+    }
+
+    private void OnRootPreviewKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        // Player shortcuts exist only while the player page is the active page.
+        if (ReferenceEquals(_contentHost?.Content, _playerPage))
+        {
+            _playerPage.HandlePreviewKeyDown(e);
+        }
+    }
+
+    private void OnPlayerFullScreenRequested(object? sender, bool fullScreen) => SetPlayerFullScreen(fullScreen);
+
+    /// <summary>
+    /// Real desktop full screen through the window presenter. The player page stays
+    /// where it is in the visual tree, so the video element keeps its media player
+    /// and playback is not interrupted; only the surrounding chrome is hidden.
+    /// </summary>
+    private void SetPlayerFullScreen(bool fullScreen)
+    {
+        if (_isPlayerFullScreen == fullScreen) return;
+        if (fullScreen && !ReferenceEquals(_contentHost?.Content, _playerPage)) return;
+
+        _isPlayerFullScreen = fullScreen;
+        if (fullScreen)
+        {
+            _restorePresenterKind = AppWindow.Presenter.Kind;
+            _restoreWindowState = AppWindow.Presenter is OverlappedPresenter overlapped
+                ? overlapped.State
+                : OverlappedPresenterState.Restored;
+            _restorePosition = AppWindow.Position;
+            _restoreSize = AppWindow.Size;
+            _restorePaneOpen = _navigationView?.IsPaneOpen ?? false;
+            AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
+        }
+        else
+        {
+            AppWindow.SetPresenter(_restorePresenterKind == AppWindowPresenterKind.FullScreen
+                ? AppWindowPresenterKind.Default
+                : _restorePresenterKind);
+            RestoreWindowPlacement();
+        }
+
+        ApplyFullScreenChrome(fullScreen);
+    }
+
+    private void RestoreWindowPlacement()
+    {
+        if (AppWindow.Presenter is not OverlappedPresenter overlapped) return;
+
+        if (_restoreWindowState == OverlappedPresenterState.Maximized)
+        {
+            if (overlapped.State != OverlappedPresenterState.Maximized)
+            {
+                overlapped.Maximize();
+            }
+
+            return;
+        }
+
+        if (_restoreWindowState != OverlappedPresenterState.Restored) return;
+
+        if (overlapped.State != OverlappedPresenterState.Restored)
+        {
+            overlapped.Restore();
+        }
+
+        var position = AppWindow.Position;
+        var size = AppWindow.Size;
+        if (position.X != _restorePosition.X || position.Y != _restorePosition.Y ||
+            size.Width != _restoreSize.Width || size.Height != _restoreSize.Height)
+        {
+            AppWindow.MoveAndResize(new RectInt32(
+                _restorePosition.X,
+                _restorePosition.Y,
+                _restoreSize.Width,
+                _restoreSize.Height));
+        }
+    }
+
+    private void ApplyFullScreenChrome(bool fullScreen)
+    {
+        AppTitleBar.Visibility = fullScreen ? Visibility.Collapsed : Visibility.Visible;
+        if (_navigationView is not null)
+        {
+            if (fullScreen)
+            {
+                _navigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.LeftMinimal;
+                _navigationView.IsPaneVisible = false;
+            }
+            else
+            {
+                _navigationView.IsPaneVisible = true;
+                _navigationView.PaneDisplayMode = NavigationViewPaneDisplayMode.Auto;
+
+                // The display mode settles with the restored window size; a pane the
+                // viewer had collapsed in the wide layout is collapsed again then.
+                var paneWasOpen = _restorePaneOpen;
+                DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+                {
+                    if (!_isPlayerFullScreen &&
+                        _navigationView.DisplayMode == NavigationViewDisplayMode.Expanded &&
+                        _navigationView.IsPaneOpen != paneWasOpen)
+                    {
+                        _navigationView.IsPaneOpen = paneWasOpen;
+                    }
+                });
+            }
+        }
+
+        // Covers the content area's 1px top border, which would show above the picture.
+        if (_contentHost is not null)
+        {
+            _contentHost.Margin = fullScreen ? new Thickness(0, -1, 0, 0) : new Thickness(0);
+        }
+
+        _playerPage.ApplyFullScreenLayout(fullScreen);
+    }
+
+    /// <summary>
+    /// Leaves the player if it is active: restores the window, snapshots the
+    /// playback record while the engine still holds the item, and stops playback.
+    /// Returns the pending record write.
+    /// </summary>
+    private Task LeavePlayer()
+    {
+        SetPlayerFullScreen(false);
+        return _playerViewModel.HasCurrentItem || ReferenceEquals(_contentHost?.Content, _playerPage)
+            ? _playerViewModel.CloseAsync()
+            : _playerViewModel.PendingSaves;
+    }
+
+    private void OnPlayerPageLeft(object? sender, EventArgs e)
+    {
+        // Safety net for any navigation that replaces the page without going through ShowPageAsync.
+        if (!ReferenceEquals(_contentHost?.Content, _playerPage))
+        {
+            _ = LeavePlayer();
+        }
+    }
+
+    private async Task SavePlayRecordAsync(PlayRecord record)
+    {
+        using var remoteTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await _recordPersistence.SaveAsync(record, Login.CreateProvider(), remoteTimeout.Token);
     }
 
     private async void OnFirstActivated(object sender, WindowActivatedEventArgs args)
@@ -301,6 +500,7 @@ public sealed partial class MainWindow : Window
     private async Task ShowPageAsync(string page)
     {
         var navigationGeneration = ++_navigationGeneration;
+        var recordSaved = LeavePlayer();
         if (_navigationView is not null)
         {
             _navigationView.SelectedItem = _navigationView.MenuItems
@@ -322,6 +522,10 @@ public sealed partial class MainWindow : Window
                     Child = UiHelpers.PageHeader("首页", "正在加载推荐与观看记录…", isLoading: true),
                 };
                 _contentHost!.Content = homeLoading;
+
+                // Continue-watching must already include what was just being played.
+                await Task.WhenAny(recordSaved, Task.Delay(TimeSpan.FromSeconds(3)));
+                if (navigationGeneration != _navigationGeneration) return;
                 await Home.LoadAsync(provider);
                 if (navigationGeneration != _navigationGeneration) return;
                 _homePage.Build(Home);
@@ -430,59 +634,45 @@ public sealed partial class MainWindow : Window
     {
         ++_navigationGeneration;
         var provider = Login.CreateProvider();
+
+        // The other sources of this work travel with the play request, so the
+        // player can switch source without searching again.
+        var candidates = _detailViewModel.SourceCandidates;
         _playerPage.SetProvider(provider);
         _contentHost!.Content = _playerPage;
-        await _playerPage.OpenAsync(detail, episodeTitle, episodeUrl, episodeNumber, provider);
+        await _playerPage.OpenAsync(detail, episodeNumber - 1, provider, candidates);
     }
 
     private async void OnPlayerCloseRequested(object? sender, EventArgs e)
     {
-        var navigationGeneration = ++_navigationGeneration;
-        await _playerPage.PersistCurrentRecordAsync();
-        _playerViewModel.Stop();
-        if (navigationGeneration != _navigationGeneration) return;
+        // ShowPageAsync leaves the player first: record snapshot, stop, then home.
         await ShowPageAsync("home");
     }
 
-    private async Task OnPlayerSaveRecordAsync(PlayRecord record)
-    {
-        var provider = Login.CreateProvider();
-        if (provider is not null)
-        {
-            try
-            {
-                await provider.SavePlayRecordAsync(record);
-            }
-            catch
-            {
-                // Ignore remote save failures; persist locally as a fallback.
-            }
-        }
-
-        try
-        {
-            await _playRecordStore.SaveAsync(record);
-        }
-        catch
-        {
-            // Local persistence is best-effort; missing the write should not block the close path.
-        }
-    }
-
-    public async void ShowDetail(SearchResult result, IContentProvider? provider)
+    /// <summary>
+    /// Shows the detail page. <paramref name="candidates"/> are the search results
+    /// the item came from; the ones that are the same work become its sources.
+    /// </summary>
+    public async void ShowDetail(
+        SearchResult result,
+        IContentProvider? provider,
+        IEnumerable<SearchResult>? candidates = null)
     {
         var navigationGeneration = ++_navigationGeneration;
         _detailPage.PlayRequested -= OnPlayEpisodeAsync;
         _detailPage.PlayRequested += OnPlayEpisodeAsync;
-        await _detailViewModel.LoadAsync(result, provider, _doubanClient);
+        await _detailViewModel.LoadAsync(result, provider, _doubanClient, candidates: candidates);
         if (navigationGeneration != _navigationGeneration) return;
         _detailPage.Build(_detailViewModel, provider);
         _contentHost!.Content = _detailPage;
     }
 
-    private void OnSearchDetailRequested(SearchResult result, IContentProvider? provider)
+    private void OnSearchDetailRequested(
+        SearchResult result,
+        IContentProvider? provider,
+        IReadOnlyList<SearchResult> candidates)
     {
-        ShowDetail(result, provider);
+        ShowDetail(result, provider, candidates);
     }
 
     private void OnShortDramaDetailRequested(SearchResult result, IContentProvider? provider)
@@ -517,10 +707,10 @@ public sealed partial class MainWindow : Window
             if (navigationGeneration != _navigationGeneration) return;
             if (results.Count > 0)
             {
-                var match = results.FirstOrDefault(r => 
-                    r.Title.Equals(movie.Title, StringComparison.OrdinalIgnoreCase)) 
+                var match = results.FirstOrDefault(r =>
+                    r.Title.Equals(movie.Title, StringComparison.OrdinalIgnoreCase))
                     ?? results[0];
-                ShowDetail(match, provider);
+                ShowDetail(match, provider, results);
             }
             else
             {
@@ -547,10 +737,10 @@ public sealed partial class MainWindow : Window
             if (navigationGeneration != _navigationGeneration) return;
             if (results.Count > 0)
             {
-                var match = results.FirstOrDefault(r => 
-                    r.Title.Equals(item.DisplayTitle, StringComparison.OrdinalIgnoreCase)) 
+                var match = results.FirstOrDefault(r =>
+                    r.Title.Equals(item.DisplayTitle, StringComparison.OrdinalIgnoreCase))
                     ?? results[0];
-                ShowDetail(match, provider);
+                ShowDetail(match, provider, results);
             }
             else
             {

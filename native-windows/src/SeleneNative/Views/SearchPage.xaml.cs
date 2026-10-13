@@ -16,7 +16,11 @@ public sealed partial class SearchPage : UserControl
     private bool _updatingControls;
     private bool _searching;
 
-    public event Action<SearchResult, IContentProvider?>? DetailRequested;
+    /// <summary>
+    /// Raised with the chosen result and the search results it came from, which
+    /// are the candidates for other sources of the same work.
+    /// </summary>
+    public event Action<SearchResult, IContentProvider?, IReadOnlyList<SearchResult>>? DetailRequested;
 
     public SearchPage()
     {
@@ -196,7 +200,7 @@ public sealed partial class SearchPage : UserControl
     {
         var row = UiHelpers.Row(result.Title, $"{result.SourceName}  {result.Year}  {result.TypeName}".Trim());
         var detailButton = new Button { Content = "查看详情" };
-        detailButton.Click += (_, _) => DetailRequested?.Invoke(result, _provider);
+        detailButton.Click += (_, _) => DetailRequested?.Invoke(result, _provider, SourceCandidatePool([]));
         row.Children.Add(detailButton);
         return row;
     }
@@ -205,8 +209,20 @@ public sealed partial class SearchPage : UserControl
     {
         var row = UiHelpers.Row(aggregate.Title, $"{aggregate.Year}  {aggregate.TypeName}  {aggregate.OriginalResults.Count} 个来源".Trim());
         var detailButton = new Button { Content = "查看详情" };
-        detailButton.Click += (_, _) => DetailRequested?.Invoke(aggregate.OriginalResults[0], _provider);
+        detailButton.Click += (_, _) => DetailRequested?.Invoke(
+            aggregate.OriginalResults[0],
+            _provider,
+            SourceCandidatePool(aggregate.OriginalResults));
         row.Children.Add(detailButton);
         return row;
+    }
+
+    /// <summary>
+    /// Every result of the current search, with <paramref name="preferred"/> first.
+    /// Which of them really are the same work is decided by the source matcher.
+    /// </summary>
+    private IReadOnlyList<SearchResult> SourceCandidatePool(IEnumerable<SearchResult> preferred)
+    {
+        return _vm is null ? preferred.ToList() : preferred.Concat(_vm.Results).ToList();
     }
 }

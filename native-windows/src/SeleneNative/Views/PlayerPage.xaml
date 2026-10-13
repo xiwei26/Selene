@@ -8,29 +8,55 @@
     xmlns:views="using:SeleneNative.Views"
     HorizontalAlignment="Stretch"
     VerticalAlignment="Stretch"
+    IsTabStop="True"
+    UseSystemFocusVisuals="False"
     mc:Ignorable="d">
-    <Grid x:Name="RootLayout" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+    <!-- Video, a fixed episode/source toolbar, and an independently scrolling info area. -->
+    <Grid x:Name="RootLayout" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="0.6*" MaxHeight="280" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition x:Name="InfoRow" Height="0.45*" MaxHeight="260" />
         </Grid.RowDefinitions>
 
-        <Grid x:Name="Header" Grid.Row="0" Padding="28,18,28,12">
+        <Grid x:Name="Header" Grid.Row="0" Padding="28,14,28,10" ColumnSpacing="12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <Button x:Name="BackButton" Content="返回" Margin="0,0,12,0" />
-            <StackPanel Grid.Column="1" Spacing="4">
-                <TextBlock x:Name="TitleText" FontSize="22" FontWeight="SemiBold" />
-                <TextBlock x:Name="SubtitleText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Button
+                x:Name="BackButton"
+                VerticalAlignment="Center"
+                AutomationProperties.Name="返回"
+                ToolTipService.ToolTip="返回首页">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon Glyph="&#xE72B;" FontSize="14" />
+                    <TextBlock Text="返回" />
+                </StackPanel>
+            </Button>
+            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                <TextBlock x:Name="TitleText" FontSize="20" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock
+                    x:Name="SubtitleText"
+                    TextTrimming="CharacterEllipsis"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             </StackPanel>
+            <!-- The time stays readable while the native controls are auto-hidden. -->
+            <TextBlock
+                x:Name="TimeText"
+                Grid.Column="2"
+                VerticalAlignment="Center"
+                AutomationProperties.Name="播放时间"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
         </Grid>
 
         <Border
+            x:Name="VideoFrame"
             Grid.Row="1"
             Margin="28,0,28,0"
+            MinHeight="120"
             Background="#050505"
             HorizontalAlignment="Stretch"
             VerticalAlignment="Stretch">
@@ -40,62 +66,300 @@
                 VerticalAlignment="Stretch" />
         </Border>
 
-        <InfoBar
-            x:Name="ErrorBar"
+        <!-- Brief feedback for shortcuts whose result is otherwise not on screen (volume, speed, seek). -->
+        <Border
+            x:Name="OsdBorder"
             Grid.Row="1"
-            Severity="Error"
-            IsOpen="False"
-            IsClosable="True"
-            Title="播放失败"
-            HorizontalAlignment="Stretch"
-            VerticalAlignment="Bottom"
-            Margin="28,0,28,0" />
+            Margin="0,0,0,120"
+            Padding="16,8,16,8"
+            CornerRadius="6"
+            Background="#CC1F1F1F"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            IsHitTestVisible="False"
+            Visibility="Collapsed">
+            <TextBlock
+                x:Name="OsdText"
+                FontSize="18"
+                FontWeight="SemiBold"
+                Foreground="White"
+                AutomationProperties.LiveSetting="Polite" />
+        </Border>
+
+        <!-- Messages sit at the top of the picture so they never cover the native controls. -->
+        <StackPanel
+            x:Name="MessageStack"
+            Grid.Row="1"
+            Margin="40,12,40,0"
+            Spacing="8"
+            VerticalAlignment="Top">
+            <InfoBar
+                x:Name="ErrorBar"
+                Severity="Error"
+                IsOpen="False"
+                IsClosable="True"
+                Title="播放失败">
+                <InfoBar.ActionButton>
+                    <Button x:Name="ErrorRetryButton" Content="重试" AutomationProperties.Name="重试当前集" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+            <InfoBar
+                x:Name="NoticeBar"
+                Severity="Warning"
+                IsOpen="False"
+                IsClosable="True"
+                Title="提示" />
+        </StackPanel>
+
+        <Border x:Name="ToolbarHost" Grid.Row="2" Padding="16,0,16,0">
+            <CommandBar
+                x:Name="PlayerToolbar"
+                Background="Transparent"
+                DefaultLabelPosition="Collapsed"
+                IsDynamicOverflowEnabled="True"
+                OverflowButtonVisibility="Visible"
+                VerticalContentAlignment="Center"
+                AutomationProperties.Name="播放器工具栏">
+                <CommandBar.Resources>
+                    <!--
+                        Icon-only commands are narrower than the default 68px so that all of
+                        them fit an 800px-wide window. Commands that still do not fit move to
+                        the overflow menu, where the framework's own overflow style applies.
+                    -->
+                    <Style TargetType="AppBarButton" BasedOn="{StaticResource DefaultAppBarButtonStyle}">
+                        <Setter Property="Width" Value="44" />
+                    </Style>
+                </CommandBar.Resources>
+                <CommandBar.Content>
+                    <TextBlock
+                        x:Name="StatusText"
+                        Margin="12,0,12,0"
+                        VerticalAlignment="Center"
+                        AutomationProperties.LiveSetting="Polite"
+                        AutomationProperties.Name="播放状态" />
+                </CommandBar.Content>
+
+                <AppBarButton
+                    x:Name="PreviousEpisodeButton"
+                    Label="上一集"
+                    Icon="Previous"
+                    DynamicOverflowOrder="1"
+                    ToolTipService.ToolTip="上一集 (Ctrl+←)" />
+                <AppBarButton
+                    x:Name="SeekBackwardButton"
+                    Label="后退 10 秒"
+                    DynamicOverflowOrder="2"
+                    ToolTipService.ToolTip="后退 10 秒 (←)">
+                    <AppBarButton.Icon>
+                        <FontIcon Glyph="&#xEB9E;" />
+                    </AppBarButton.Icon>
+                </AppBarButton>
+                <AppBarButton
+                    x:Name="PlayPauseButton"
+                    Label="播放"
+                    DynamicOverflowOrder="9"
+                    ToolTipService.ToolTip="播放 (空格)">
+                    <AppBarButton.Icon>
+                        <FontIcon x:Name="PlayPauseIcon" Glyph="&#xE768;" />
+                    </AppBarButton.Icon>
+                </AppBarButton>
+                <AppBarButton
+                    x:Name="SeekForwardButton"
+                    Label="前进 10 秒"
+                    DynamicOverflowOrder="2"
+                    ToolTipService.ToolTip="前进 10 秒 (→)">
+                    <AppBarButton.Icon>
+                        <FontIcon Glyph="&#xEB9D;" />
+                    </AppBarButton.Icon>
+                </AppBarButton>
+                <AppBarButton
+                    x:Name="NextEpisodeButton"
+                    Label="下一集"
+                    Icon="Next"
+                    DynamicOverflowOrder="1"
+                    ToolTipService.ToolTip="下一集 (Ctrl+→)" />
+
+                <AppBarSeparator />
+
+                <AppBarButton
+                    x:Name="MuteButton"
+                    Label="静音"
+                    DynamicOverflowOrder="4"
+                    ToolTipService.ToolTip="静音 (M)">
+                    <AppBarButton.Icon>
+                        <FontIcon x:Name="MuteIcon" Glyph="&#xE767;" />
+                    </AppBarButton.Icon>
+                </AppBarButton>
+                <AppBarButton
+                    x:Name="VolumeButton"
+                    Label="音量"
+                    DynamicOverflowOrder="7"
+                    ToolTipService.ToolTip="音量 (↑ / ↓)">
+                    <AppBarButton.Icon>
+                        <FontIcon Glyph="&#xE995;" />
+                    </AppBarButton.Icon>
+                    <AppBarButton.Flyout>
+                        <Flyout x:Name="VolumeFlyout" Placement="Top" AllowFocusOnInteraction="True">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <Button
+                                    x:Name="FlyoutMuteButton"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="静音"
+                                    ToolTipService.ToolTip="静音 (M)">
+                                    <FontIcon x:Name="FlyoutMuteIcon" Glyph="&#xE767;" FontSize="16" />
+                                </Button>
+                                <Slider
+                                    x:Name="VolumeSlider"
+                                    Width="200"
+                                    Minimum="0"
+                                    Maximum="100"
+                                    StepFrequency="1"
+                                    SmallChange="5"
+                                    LargeChange="10"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="音量" />
+                                <TextBlock
+                                    x:Name="VolumeValueText"
+                                    Width="44"
+                                    TextAlignment="Right"
+                                    VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Flyout>
+                    </AppBarButton.Flyout>
+                </AppBarButton>
+                <AppBarButton
+                    x:Name="SpeedButton"
+                    Label="倍速"
+                    DynamicOverflowOrder="6"
+                    ToolTipService.ToolTip="倍速">
+                    <AppBarButton.Content>
+                        <TextBlock x:Name="SpeedButtonText" Text="1x" FontWeight="SemiBold" />
+                    </AppBarButton.Content>
+                    <AppBarButton.Flyout>
+                        <MenuFlyout x:Name="SpeedFlyout" Placement="Top" />
+                    </AppBarButton.Flyout>
+                </AppBarButton>
+
+                <AppBarSeparator />
+
+                <AppBarButton
+                    x:Name="EpisodesButton"
+                    Label="选集"
+                    DynamicOverflowOrder="5"
+                    ToolTipService.ToolTip="选集">
+                    <AppBarButton.Icon>
+                        <FontIcon Glyph="&#xE8FD;" />
+                    </AppBarButton.Icon>
+                    <AppBarButton.Flyout>
+                        <Flyout x:Name="EpisodesFlyout" Placement="Top" AllowFocusOnInteraction="True">
+                            <Grid Width="372" MaxHeight="360" RowSpacing="8">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock
+                                        x:Name="EpisodesHeaderText"
+                                        Text="选集"
+                                        FontWeight="SemiBold"
+                                        VerticalAlignment="Center" />
+                                    <ToggleButton
+                                        x:Name="ReverseOrderToggle"
+                                        Grid.Column="1"
+                                        Content="倒序"
+                                        AutomationProperties.Name="倒序显示集数"
+                                        ToolTipService.ToolTip="倒序显示集数（不改变集数编号）" />
+                                </Grid>
+                                <GridView
+                                    x:Name="EpisodesGrid"
+                                    Grid.Row="1"
+                                    SelectionMode="Single"
+                                    IsItemClickEnabled="True"
+                                    AutomationProperties.Name="集数列表" />
+                            </Grid>
+                        </Flyout>
+                    </AppBarButton.Flyout>
+                </AppBarButton>
+                <AppBarButton
+                    x:Name="SourcesButton"
+                    Label="来源"
+                    Icon="Switch"
+                    DynamicOverflowOrder="3"
+                    ToolTipService.ToolTip="切换播放来源">
+                    <AppBarButton.Flyout>
+                        <Flyout x:Name="SourcesFlyout" Placement="Top" AllowFocusOnInteraction="True">
+                            <StackPanel Width="340" Spacing="8">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="播放来源" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <ProgressRing
+                                        x:Name="SourcesLoadingRing"
+                                        Grid.Column="1"
+                                        Width="16"
+                                        Height="16"
+                                        IsActive="False"
+                                        AutomationProperties.Name="正在查找来源" />
+                                </Grid>
+                                <ListView
+                                    x:Name="SourcesList"
+                                    MaxHeight="280"
+                                    SelectionMode="Single"
+                                    IsItemClickEnabled="True"
+                                    AutomationProperties.Name="来源列表" />
+                                <TextBlock
+                                    x:Name="SourcesHintText"
+                                    TextWrapping="Wrap"
+                                    AutomationProperties.LiveSetting="Polite"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                        </Flyout>
+                    </AppBarButton.Flyout>
+                </AppBarButton>
+                <AppBarButton
+                    x:Name="FullScreenButton"
+                    Label="全屏"
+                    DynamicOverflowOrder="8"
+                    ToolTipService.ToolTip="全屏 (F / F11)">
+                    <AppBarButton.Icon>
+                        <FontIcon x:Name="FullScreenIcon" Glyph="&#xE740;" />
+                    </AppBarButton.Icon>
+                </AppBarButton>
+
+                <CommandBar.SecondaryCommands>
+                    <AppBarToggleButton
+                        x:Name="AutoNextToggle"
+                        Label="自动播放下一集"
+                        ToolTipService.ToolTip="本集正常播放结束后自动播放下一集" />
+                    <AppBarToggleButton
+                        x:Name="InfoToggle"
+                        Label="显示影片资料"
+                        IsChecked="True"
+                        ToolTipService.ToolTip="显示或折叠下方的影片资料" />
+                    <AppBarButton
+                        x:Name="RetryButton"
+                        Label="重新加载当前集"
+                        Icon="Refresh"
+                        ToolTipService.ToolTip="重新加载当前集并回到当前位置" />
+                </CommandBar.SecondaryCommands>
+            </CommandBar>
+        </Border>
 
         <ScrollViewer
             x:Name="BottomScrollViewer"
-            Grid.Row="2"
+            Grid.Row="3"
             VerticalScrollBarVisibility="Auto"
             VerticalScrollMode="Enabled"
             HorizontalScrollMode="Disabled">
-        <StackPanel x:Name="ControlPanel" Padding="28,12,28,28" Spacing="12">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <Slider
-                    x:Name="SeekSlider"
-                    Minimum="0"
-                    Maximum="1"
-                    StepFrequency="1"
-                    SmallChange="5"
-                    LargeChange="30"
-                    IsEnabled="False" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0">
-                    <TextBlock x:Name="PlayTimeText" Text="0:00" />
-                    <TextBlock Text="/" />
-                    <TextBlock x:Name="TotalTimeText" Text="--:--" />
-                </StackPanel>
-            </Grid>
-
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button x:Name="TogglePlayPauseButton" Content="暂停" Style="{StaticResource AccentButtonStyle}" />
-                <Button x:Name="RetryButton" Content="重试" />
-                <Button x:Name="ToggleOrderButton" Content="反转集数" />
+            <StackPanel x:Name="ControlPanel" Padding="28,4,28,28" Spacing="12">
+                <StackPanel x:Name="InfoPanel" Spacing="12" />
             </StackPanel>
-
-            <TextBlock Text="播放源" FontWeight="SemiBold" />
-            <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled">
-                <StackPanel x:Name="SourcesRow" Orientation="Horizontal" Spacing="8" />
-            </ScrollViewer>
-
-            <TextBlock Text="选集" FontWeight="SemiBold" />
-            <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled">
-                <StackPanel x:Name="EpisodesRow" Orientation="Horizontal" Spacing="8" />
-            </ScrollViewer>
-
-            <StackPanel x:Name="InfoPanel" Spacing="12" Margin="0,6,0,0" />
-        </StackPanel>
         </ScrollViewer>
     </Grid>
 </UserControl>

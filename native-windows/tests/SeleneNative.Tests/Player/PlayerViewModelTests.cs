@@ -10,11 +10,11 @@ public sealed class PlayerViewModelTests
     [Fact]
     public void Stop_ShouldResetAllState()
     {
-        var player = new FakeMediaPlayer();
+        var player = new FakeMediaPlayer { LengthSeconds = 120 };
         var vm = new PlayerViewModel(() => player);
         vm.ReplaceItem("https://example.com/video.m3u8", NewResult("Test", "src1"), 0);
         vm.Play();
-        player.SimulateState(MediaPlaybackState.Playing);
+        player.SimulateOpened();
         player.SimulatePosition(42.0);
 
         vm.Stop();
@@ -25,17 +25,20 @@ public sealed class PlayerViewModelTests
         Assert.Null(vm.CurrentResult);
         Assert.Null(vm.PlaybackError);
         Assert.False(vm.IsLoading);
+        Assert.False(vm.CanSeek);
+        Assert.Equal(MediaPlaybackState.Stopped, vm.PlaybackState);
     }
 
     [Fact]
-    public void PendingSeekTime_ShouldBeConsumedOnPlaying()
+    public void PendingSeekTime_ShouldBeConsumedOncePlaybackIsReady()
     {
         var player = new FakeMediaPlayer { LengthSeconds = 120 };
         var vm = new PlayerViewModel(() => player);
         vm.ReplaceItem("https://example.com/video.m3u8", NewResult("Test", "src1"), 0);
         vm.PendingSeekTime = 60;
+        vm.Play();
 
-        player.SimulateState(MediaPlaybackState.Playing);
+        player.SimulateOpened();
 
         Assert.Null(vm.PendingSeekTime);
         Assert.Equal(60, player.Position, 1);
@@ -47,13 +50,17 @@ public sealed class PlayerViewModelTests
         var player = new FakeMediaPlayer { LengthSeconds = 120 };
         var vm = new PlayerViewModel(() => player);
         vm.ReplaceItem("https://example.com/video.m3u8", NewResult("Test", "src1"), 0);
-        player.SimulateState(MediaPlaybackState.Playing);
+        vm.Play();
+        player.SimulateOpened();
 
-        vm.SeekTo(180);
-
+        Assert.True(vm.SeekTo(180));
         Assert.Equal(120, player.Position, 1);
         Assert.Equal(120, vm.PlayTime, 1);
         Assert.Equal(120, vm.TotalTime, 1);
+
+        Assert.True(vm.SeekTo(-30));
+        Assert.Equal(0, player.Position, 1);
+        Assert.Equal(0, vm.PlayTime, 1);
     }
 
     [Fact]
@@ -62,7 +69,8 @@ public sealed class PlayerViewModelTests
         var player = new FakeMediaPlayer();
         var vm = new PlayerViewModel(() => player);
         vm.ReplaceItem("https://example.com/video.m3u8", NewResult("Test", "src1"), 0);
-        player.SimulateState(MediaPlaybackState.Playing);
+        vm.Play();
+        player.SimulateOpened();
 
         player.LengthSeconds = 120;
         player.SimulatePosition(42);
@@ -74,15 +82,18 @@ public sealed class PlayerViewModelTests
     [Fact]
     public void Retry_ShouldReloadAndPlay()
     {
-        var player = new FakeMediaPlayer();
+        var player = new FakeMediaPlayer { LengthSeconds = 120 };
         var vm = new PlayerViewModel(() => player);
         vm.ReplaceItem("https://example.com/video.m3u8", NewResult("Test", "src1"), 0);
-        player.SimulateState(MediaPlaybackState.Error);
-        vm.PlaybackError = "fail";
+        vm.Play();
+        player.SimulateError("fail");
+        Assert.Equal("fail", vm.PlaybackError);
 
         vm.Retry();
+        player.SimulateOpened();
 
         Assert.Null(vm.PlaybackError);
+        Assert.Equal(2, player.LoadedUrls.Count);
         Assert.Equal(MediaPlaybackState.Playing, player.State);
     }
 
@@ -93,10 +104,12 @@ public sealed class PlayerViewModelTests
         var vm = new PlayerViewModel(() => player);
         vm.ReplaceItem("https://example.com/video.m3u8", NewResult("Test", "src1"), 0);
         vm.Play();
+        player.SimulateOpened();
 
         vm.TogglePlayPause();
 
         Assert.Equal(MediaPlaybackState.Paused, player.State);
+        Assert.False(vm.IsPlaybackActive);
     }
 
     [Fact]
@@ -106,11 +119,13 @@ public sealed class PlayerViewModelTests
         var vm = new PlayerViewModel(() => player);
         vm.ReplaceItem("https://example.com/video.m3u8", NewResult("Test", "src1"), 0);
         vm.Play();
+        player.SimulateOpened();
         vm.Pause();
 
         vm.TogglePlayPause();
 
         Assert.Equal(MediaPlaybackState.Playing, player.State);
+        Assert.True(vm.IsPlaybackActive);
     }
 
     [Fact]
@@ -126,7 +141,8 @@ public sealed class PlayerViewModelTests
         var player = new FakeMediaPlayer { LengthSeconds = 100 };
         var vm = new PlayerViewModel(() => player);
         vm.ReplaceItem("https://example.com/video.m3u8", NewResult("Title", "src"), 2);
-        player.SimulateState(MediaPlaybackState.Playing);
+        vm.Play();
+        player.SimulateOpened();
         player.SimulatePosition(30.0);
 
         var record = vm.MakePlayRecord();
@@ -144,7 +160,17 @@ public sealed class PlayerViewModelTests
     {
         var player = new FakeMediaPlayer { LengthSeconds = 120 };
         var vm = new PlayerViewModel(() => player);
-        var provider = new CapturingContentProvider();
+        var provider = new StubContentProvider
+        {
+            OnDetail = (source, id) => Task.FromResult<SearchResult?>(new SearchResult
+            {
+                Id = id,
+                Title = "Video",
+                Source = source,
+                SourceName = "Source A",
+                Episodes = [$"https://example.com/{id}/ep1.m3u8", $"https://example.com/{id}/ep2.m3u8"],
+            }),
+        };
         var record = new PlayRecord
         {
             Id = "source-a+video-1",
@@ -158,21 +184,22 @@ public sealed class PlayerViewModelTests
         };
 
         await vm.LoadDetailAndPlayAsync(record, provider);
+        player.SimulateOpened();
 
-        Assert.Equal("source-a", provider.RequestedSource);
-        Assert.Equal("video-1", provider.RequestedId);
+        Assert.Equal(("source-a", "video-1"), Assert.Single(provider.DetailRequests));
         Assert.Equal(0, vm.CurrentEpisodeIndex);
         Assert.Equal("https://example.com/video-1/ep1.m3u8", vm.CurrentEpisodeUrl);
         Assert.Equal(30, player.Position, 1);
+        Assert.Equal(MediaPlaybackState.Playing, player.State);
     }
 
     [Fact]
     public async Task LoadDetailAndPlayAsync_ShouldPreserveEpisodeOrder_WhenUrlsContainQualityMarkers()
     {
         var vm = new PlayerViewModel(() => new FakeMediaPlayer());
-        var provider = new CapturingContentProvider
+        var provider = new StubContentProvider
         {
-            DetailResult = new SearchResult
+            OnDetail = (_, _) => Task.FromResult<SearchResult?>(new SearchResult
             {
                 Id = "video-1",
                 Title = "Video",
@@ -183,7 +210,7 @@ public sealed class PlayerViewModelTests
                     "https://example.com/video-1/ep1-480.m3u8",
                     "https://example.com/video-1/ep2-2160.m3u8"
                 ],
-            }
+            }),
         };
         var record = new PlayRecord
         {
@@ -204,11 +231,11 @@ public sealed class PlayerViewModelTests
     [Fact]
     public async Task LoadDetailAndPlayAsync_ShouldNotPlayDifferentSearchResult_WhenOriginalRecordIsMissing()
     {
-        var vm = new PlayerViewModel(() => new FakeMediaPlayer());
-        var provider = new CapturingContentProvider
+        var player = new FakeMediaPlayer();
+        var vm = new PlayerViewModel(() => player);
+        var provider = new StubContentProvider
         {
-            DetailResult = null,
-            SearchResults =
+            OnSearch = _ => Task.FromResult<IReadOnlyList<SearchResult>>(
             [
                 new SearchResult
                 {
@@ -218,7 +245,7 @@ public sealed class PlayerViewModelTests
                     SourceName = "Other Source",
                     Episodes = ["https://example.com/other/ep1.m3u8"],
                 }
-            ]
+            ]),
         };
         var record = new PlayRecord
         {
@@ -235,16 +262,17 @@ public sealed class PlayerViewModelTests
         Assert.Null(vm.CurrentResult);
         Assert.Null(vm.CurrentEpisodeUrl);
         Assert.NotNull(vm.PlaybackError);
+        Assert.False(vm.IsLoading);
+        Assert.Empty(player.LoadedUrls);
     }
 
     [Fact]
     public async Task LoadDetailAndPlayAsync_ShouldPlaySameTitleSearchResult_WhenStoredSourceIdNoLongerMatches()
     {
         var vm = new PlayerViewModel(() => new FakeMediaPlayer());
-        var provider = new CapturingContentProvider
+        var provider = new StubContentProvider
         {
-            DetailResult = null,
-            SearchResults =
+            OnSearch = _ => Task.FromResult<IReadOnlyList<SearchResult>>(
             [
                 new SearchResult
                 {
@@ -258,7 +286,7 @@ public sealed class PlayerViewModelTests
                         "https://example.com/cang/ep2.m3u8"
                     ],
                 }
-            ]
+            ]),
         };
         var record = new PlayRecord
         {
@@ -300,176 +328,5 @@ public sealed class PlayerViewModelTests
             SourceName = source,
             Episodes = episodes,
         };
-    }
-
-    private sealed class FakeMediaPlayer : IMediaPlayer
-    {
-        public double LengthSeconds { get; set; }
-        public double Length => LengthSeconds;
-        public double Position { get; set; }
-        public MediaPlaybackState State { get; private set; } = MediaPlaybackState.Stopped;
-
-        public event EventHandler<MediaStateChangedEventArgs>? StateChanged;
-        public event EventHandler<MediaPositionChangedEventArgs>? PositionChanged;
-        public event EventHandler<MediaErrorEventArgs>? Error;
-
-        public void Load(string url) { }
-        public void Play() => SimulateState(MediaPlaybackState.Playing);
-        public void Pause() => SimulateState(MediaPlaybackState.Paused);
-        public void Stop() => SimulateState(MediaPlaybackState.Stopped);
-        public void Dispose() { }
-
-        public void SimulateState(MediaPlaybackState state)
-        {
-            State = state;
-            StateChanged?.Invoke(this, new MediaStateChangedEventArgs(state));
-        }
-
-        public void SimulatePosition(double position)
-        {
-            Position = position;
-            PositionChanged?.Invoke(this, new MediaPositionChangedEventArgs(position));
-        }
-    }
-
-    private sealed class CapturingContentProvider : IContentProvider
-    {
-        public string? RequestedSource { get; private set; }
-        public string? RequestedId { get; private set; }
-        public SearchResult? DetailResult { get; init; }
-        public IReadOnlyList<SearchResult> SearchResults { get; init; } = [];
-
-        public Task<LoginSession> LoginAsync(
-            string username,
-            string password,
-            CancellationToken cancellationToken = default)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task<IReadOnlyList<SearchResult>> SearchAsync(
-            string query,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(SearchResults);
-        }
-
-        public Task<SearchResult?> DetailAsync(
-            string source,
-            string id,
-            CancellationToken cancellationToken = default)
-        {
-            RequestedSource = source;
-            RequestedId = id;
-            if (DetailResult is not null || SearchResults.Count > 0)
-            {
-                return Task.FromResult(DetailResult);
-            }
-
-            var result = new SearchResult
-            {
-                Id = id,
-                Title = "Video",
-                Source = source,
-                SourceName = "Source A",
-                Episodes =
-                [
-                    $"https://example.com/{id}/ep1.m3u8",
-                    $"https://example.com/{id}/ep2.m3u8"
-                ],
-            };
-            return Task.FromResult<SearchResult?>(result);
-        }
-
-        public Task<IReadOnlyList<SearchResource>> SearchResourcesAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyList<SearchResource>>([]);
-        }
-
-        public Task<IReadOnlyList<FavoriteItem>> GetFavoritesAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyList<FavoriteItem>>([]);
-        }
-
-        public Task AddFavoriteAsync(
-            string source,
-            string id,
-            Dictionary<string, object> data,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task RemoveFavoriteAsync(string source, string id, CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task<IReadOnlyList<PlayRecord>> GetPlayRecordsAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyList<PlayRecord>>([]);
-        }
-
-        public Task SavePlayRecordAsync(PlayRecord record, CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task DeletePlayRecordAsync(string source, string id, CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task ClearPlayRecordsAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task<IReadOnlyList<string>> GetSearchHistoryAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyList<string>>([]);
-        }
-
-        public Task AddSearchHistoryAsync(string query, CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task DeleteSearchHistoryAsync(string query, CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task ClearSearchHistoryAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task<IReadOnlyList<SearchSuggestion>> SearchSuggestionsAsync(
-            string query,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyList<SearchSuggestion>>([]);
-        }
-
-        public Task<IReadOnlyList<LiveSource>> GetLiveSourcesAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyList<LiveSource>>([]);
-        }
-
-        public Task<IReadOnlyList<LiveChannel>> GetLiveChannelsAsync(
-            string sourceKey,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyList<LiveChannel>>([]);
-        }
-
-        public Task<EpgData?> GetLiveEpgAsync(
-            string tvgId,
-            string sourceKey,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<EpgData?>(null);
-        }
     }
 }

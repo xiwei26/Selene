@@ -12,6 +12,8 @@
             Width="48"
             Height="48"
             IsActive="False"
+            IsHitTestVisible="False"
+            AutomationProperties.Name="正在加载视频"
             HorizontalAlignment="Center"
             VerticalAlignment="Center" />
     </Grid>

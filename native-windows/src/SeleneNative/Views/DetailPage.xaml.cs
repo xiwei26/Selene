@@ -132,12 +132,18 @@ public sealed partial class DetailPage : UserControl
             sourceRow.Children.Add(new TextBlock { Text = "源:", VerticalAlignment = VerticalAlignment.Center });
             foreach (var source in _vm.Sources)
             {
-                var btn = new Button { Content = source.SourceName, Tag = source };
+                var btn = new Button
+                {
+                    Content = source.SourceName,
+                    Tag = source,
+                    IsEnabled = !SourceMatcher.IsSameSource(source, result),
+                };
                 btn.Click += async (_, _) =>
                 {
                     if (btn.Tag is SearchResult sr)
                     {
-                        await _vm.LoadAsync(sr, _provider, null);
+                        // Keep the other sources available after switching.
+                        await _vm.LoadAsync(sr, _provider, null, candidates: _vm.SourceCandidates);
                         Render();
                     }
                 };
