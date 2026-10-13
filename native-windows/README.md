@@ -1,65 +1,70 @@
 # Selene Native Windows
 
-This folder contains the native Windows client for Selene, built with WinUI 3
-and .NET 8.
+Selene's Windows entry point is the native WinUI 3 / .NET 8 app in this folder.
+The installer and Start menu shortcut launch `SeleneNative.exe`.
 
-## Current Status
+## Interface
 
-This is an early migration, not a full feature-parity port of the Flutter or
-native macOS clients.
+- Native Fluent controls and an adaptive `NavigationView` that collapses at
+  smaller window sizes.
+- A draggable WinUI title bar with system window buttons and a Mica backdrop on
+  supported Windows versions; Windows provides the fallback surface.
+- System, light, and dark themes. Changes apply immediately and persist for the
+  next launch.
+- A home recommendation, continue-watching posters, movie/TV/show categories,
+  and the Bangumi calendar. Poster actions support Tab, Enter, and Space.
+- Native login, search, favorites, history, live TV, settings, and admin pages.
+- LunaTV short-drama, Bilibili, YouTube, Douban, and TMDB feature pages.
+- In-app playback with Windows `MediaPlayer` / WinUI `MediaPlayerElement`,
+  seeking, retry, episode switching, resume, and backend playback records.
 
-Implemented today:
-
-- Self-contained WinUI 3 app publish and launch flow.
-- Basic native shell with left navigation.
-- Home screen data pipeline:
-  - Continue watching
-  - Hot movies
-  - Hot TV shows
-  - Today's Bangumi calendar
-  - Hot shows
-- Core models, services, and ViewModel coverage for the home screen.
-
-Not implemented yet:
-
-- Login and session management.
-- Search, detail pages, categories, favorites, and full history pages.
-- Video playback, resume, DLNA, PiP, and live TV playback.
-- Settings, theme switching, update checking, and about page.
-- Dependency injection setup, CommunityToolkit.Mvvm adoption, and libVLCSharp
-  integration.
+Features depend on the connected LunaTV server and Windows media codec support.
+The core API clients, models, and view models remain independent of WinUI.
 
 ## Requirements
 
-- Windows 10 version 1903 or later.
-- .NET 8 SDK.
-- Visual Studio 2022 is optional for command-line builds, but useful for WinUI
-  debugging.
+- Windows 10 version 1903 (build 18362) or later; Windows 11 supports Mica.
+- .NET 8 SDK for development.
+- Inno Setup 6 for creating the installer.
+- Visual Studio 2022 is optional for command-line builds.
 
-## Build And Run
+The installer includes the .NET and Windows App SDK runtime files.
 
-From this directory:
+## Build, Test, And Package
+
+From the repository root:
 
 ```powershell
-.\build.ps1
+.\native-windows\build-installer.ps1 -Platform x64
 ```
 
-The publish output is written to:
+This runs the Windows build and tests, publishes the self-contained app to
+`native-windows/publish/win-x64`, and produces:
 
 ```text
-publish\win-x64
+native-windows/dist/selene-1.1.0-windows-x64-setup.exe
 ```
 
-Run the published app:
+The version comes from the repository's `pubspec.yaml`; override it with
+`-Version` when packaging a separately versioned release. Close a running native
+client before rebuilding. Scripts resolve paths relative to their own location.
+
+Build and publish without an installer:
 
 ```powershell
-.\run.ps1
+.\native-windows\build.ps1 -Platform x64
 ```
 
-## Tests
+Run the published native client:
 
 ```powershell
-dotnet test tests\SeleneNative.Tests\SeleneNative.Tests.csproj -c Release -p:Platform=x64
+.\native-windows\run.ps1
+```
+
+Run core and regression tests:
+
+```powershell
+dotnet test .\native-windows\tests\SeleneNative.Tests\SeleneNative.Tests.csproj -c Release -p:Platform=x64
 ```
 
 ## Project Layout
@@ -67,21 +72,24 @@ dotnet test tests\SeleneNative.Tests\SeleneNative.Tests.csproj -c Release -p:Pla
 ```text
 native-windows/
 |-- src/
-|   |-- SeleneNative/          WinUI 3 application
-|   `-- SeleneNative.Core/     Testable models, services, and ViewModels
+|   |-- SeleneNative/          WinUI shell, native controls, and Windows media host
+|   `-- SeleneNative.Core/     Models, LunaTV services, and view models
 |-- tests/
 |   `-- SeleneNative.Tests/    xUnit tests
-|-- build.ps1
-`-- run.ps1
+|-- build.ps1                 Build, test, and self-contained publish
+|-- build-installer.ps1       Inno Setup installer packaging
+|-- installer.iss
+`-- run.ps1                   Launch the published native app
 ```
 
-## Architecture Notes
+## Architecture
 
-- `MainWindow.xaml` currently contains only the root grid.
-- The visible shell and home screen are constructed in `MainWindow.xaml.cs`
-  because richer template-based XAML hit a Windows App SDK XAML compiler failure
-  without actionable diagnostics.
-- `EnableMsixTooling` is enabled for Windows App SDK build target support, while
-  the app still publishes unpackaged and self-contained.
-- Public API base URLs are currently hard-coded and should move behind
-  configuration before broader feature migration.
+`App.xaml` loads WinUI's `XamlControlsResources` so controls use the standard
+Fluent styles and Windows accent color. The shell applies the persisted theme
+through `Root.RequestedTheme`; custom content uses dynamic theme resources.
+The player keeps its video surface dark while other metadata follows the theme.
+
+Pages are built with native WinUI controls in XAML and C#. Theme-aware shared
+components live in `UiHelpers.cs`. `SeleneNative.Core` uses the existing LunaTV
+routes and response shapes, including `/api/search`, `/api/detail`,
+`/api/playrecords`, and server-side `/api/douban/*` requests for logged-in users.

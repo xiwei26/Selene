@@ -50,7 +50,7 @@ Stack:
 - WinUI 3
 - .NET 8
 - Windows App SDK
-- LibVLCSharp for in-app playback
+- Windows MediaPlayer / WinUI MediaPlayerElement for in-app playback
 - xUnit tests
 - Inno Setup installer packaging
 
@@ -65,6 +65,11 @@ Current playback behavior:
   backend provider.
 - The player includes seek, retry, episode order, and pause/resume controls.
 
+The Windows interface uses native WinUI 3 / Fluent controls, adaptive navigation,
+a draggable title bar, and a Mica window backdrop on supported systems. Settings
+offer system, light, and dark themes; the choice applies immediately and is
+restored on the next launch. Poster actions support keyboard navigation.
+
 Build, test, publish, and create an installable `.exe`:
 
 ```powershell
@@ -75,7 +80,7 @@ cd native-windows
 The installer is written to:
 
 ```text
-native-windows/dist/selene-1.6.8-windows-x64-setup.exe
+native-windows/dist/selene-1.1.0-windows-x64-setup.exe
 ```
 
 Run the full Windows test suite:
