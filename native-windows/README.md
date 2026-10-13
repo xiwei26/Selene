@@ -84,6 +84,12 @@ native-windows/
 
 ## Architecture
 
+The next player-control implementation is specified in
+[the Claude Code / Opus 5.5 handoff](../docs/superpowers/plans/2026-10-13-windows-player-controls.md).
+The plan covers native transport controls, volume/mute, playback speed,
+fullscreen, shortcuts, episode navigation, source switching, and reliable
+resume/history. These are planned additions, not completed features.
+
 `App.xaml` loads WinUI's `XamlControlsResources` so controls use the standard
 Fluent styles and Windows accent color. The shell applies the persisted theme
 through `Root.RequestedTheme`; custom content uses dynamic theme resources.
