@@ -255,7 +255,7 @@ public sealed partial class PlayerPage : UserControl
             var button = new Button { Content = title, Tag = index };
             if (isActive)
             {
-                button.Background = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"];
+                button.Style = (Style)Application.Current.Resources["AccentButtonStyle"];
             }
             button.Click += (_, _) =>
             {
@@ -324,17 +324,17 @@ public sealed partial class PlayerPage : UserControl
         var tmdb = _metadata?.TmdbBackdrop;
         if (tmdb?.Rating is double tmdbRating)
         {
-            AddChip(chips, $"TMDB {tmdbRating:0.0}", Color.FromArgb(255, 245, 197, 24));
+            AddChip(chips, $"TMDB {tmdbRating:0.0}");
         }
 
         if (tmdb?.NumberOfSeasons is int seasons and > 0)
         {
-            AddChip(chips, $"共 {seasons} 季", Color.FromArgb(255, 18, 200, 102));
+            AddChip(chips, $"共 {seasons} 季");
         }
 
         if (!string.IsNullOrWhiteSpace(_metadata?.QuickInfo?.Rating))
         {
-            AddChip(chips, $"豆瓣 {_metadata!.QuickInfo!.Rating}", Color.FromArgb(255, 255, 215, 0));
+            AddChip(chips, $"豆瓣 {_metadata!.QuickInfo!.Rating}");
         }
 
         if (chips.Children.Count > 0)
@@ -347,13 +347,14 @@ public sealed partial class PlayerPage : UserControl
         var overview = _metadata?.Overview ?? result.Description;
         if (!string.IsNullOrWhiteSpace(overview))
         {
-            stack.Children.Add(new TextBlock
+            var overviewText = new TextBlock
             {
                 Text = overview,
                 TextWrapping = TextWrapping.Wrap,
                 MaxWidth = 1100,
-                Foreground = new SolidColorBrush(Color.FromArgb(225, 255, 255, 255)),
-            });
+            };
+            UiHelpers.SetThemeResource(overviewText, TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+            stack.Children.Add(overviewText);
         }
 
         if (_metadata?.QuickInfo is DoubanQuickInfo quickInfo)
@@ -373,6 +374,8 @@ public sealed partial class PlayerPage : UserControl
 
         if (_provider is not null && _metadata is null)
         {
+            var loadingText = new TextBlock { Text = "正在加载更多详情..." };
+            UiHelpers.SetThemeResource(loadingText, TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
             stack.Children.Add(new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -380,11 +383,7 @@ public sealed partial class PlayerPage : UserControl
                 Children =
                 {
                     new ProgressRing { Width = 16, Height = 16, IsActive = true },
-                    new TextBlock
-                    {
-                        Text = "正在加载更多详情...",
-                        Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-                    }
+                    loadingText
                 }
             });
         }
@@ -463,8 +462,7 @@ public sealed partial class PlayerPage : UserControl
         foreach (var item in recommendations.Take(8))
         {
             row.Children.Add(CreateChip(
-                string.IsNullOrWhiteSpace(item.Rating) ? item.Title : $"{item.Title} {item.Rating}",
-                Color.FromArgb(235, 255, 255, 255)));
+                string.IsNullOrWhiteSpace(item.Rating) ? item.Title : $"{item.Title} {item.Rating}"));
         }
 
         stack.Children.Add(new ScrollViewer
@@ -484,39 +482,40 @@ public sealed partial class PlayerPage : UserControl
             return;
         }
 
-        stack.Children.Add(new TextBlock
+        var label = new TextBlock
         {
             Text = text,
             TextWrapping = TextWrapping.Wrap,
             MaxWidth = 1100,
-            Foreground = new SolidColorBrush(Color.FromArgb(215, 255, 255, 255)),
-        });
+        };
+        UiHelpers.SetThemeResource(label, TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+        stack.Children.Add(label);
     }
 
-    private static void AddChip(StackPanel chips, string? text, Color? foreground = null)
+    private static void AddChip(StackPanel chips, string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
             return;
         }
 
-        chips.Children.Add(CreateChip(text, foreground ?? Color.FromArgb(235, 255, 255, 255)));
+        chips.Children.Add(CreateChip(text));
     }
 
-    private static Border CreateChip(string text, Color foreground)
+    private static Border CreateChip(string text)
     {
-        return new Border
+        var label = new TextBlock { Text = text, FontSize = 12 };
+        UiHelpers.SetThemeResource(label, TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+        var chip = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(80, 255, 255, 255)),
-            CornerRadius = new CornerRadius(12),
+            CornerRadius = new CornerRadius(4),
             Padding = new Thickness(8, 3, 8, 3),
-            Child = new TextBlock
-            {
-                Text = text,
-                FontSize = 12,
-                Foreground = new SolidColorBrush(foreground),
-            },
+            BorderThickness = new Thickness(1),
+            Child = label,
         };
+        UiHelpers.SetThemeResource(chip, Border.BackgroundProperty, "ControlFillColorSecondaryBrush");
+        UiHelpers.SetThemeResource(chip, Border.BorderBrushProperty, "CardStrokeColorDefaultBrush");
+        return chip;
     }
 
     private static string JoinLine(string label, IReadOnlyList<string> values)

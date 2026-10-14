@@ -33,22 +33,30 @@ public sealed partial class LoginPage : UserControl
             Header = "服务端地址",
             PlaceholderText = "https://example.com",
             Text = viewModel.Session?.ServerUrl ?? string.Empty,
-            Width = 460,
+            MaxWidth = 460,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
         };
         var usernameBox = new TextBox
         {
             Header = "用户名",
             PlaceholderText = "请输入用户名",
             Text = viewModel.Session?.Username ?? string.Empty,
-            Width = 460,
+            MaxWidth = 460,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
         };
         var passwordBox = new PasswordBox
         {
             Header = "密码",
             PlaceholderText = "请输入密码",
-            Width = 460,
+            MaxWidth = 460,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
         };
-        var loginButton = new Button { Content = "登录", HorizontalAlignment = HorizontalAlignment.Left };
+        var loginButton = new Button
+        {
+            Content = "登录",
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Style = (Style)Application.Current.Resources["AccentButtonStyle"],
+        };
         loginButton.Click += async (_, _) =>
         {
             loginButton.IsEnabled = false;
@@ -73,7 +81,13 @@ public sealed partial class LoginPage : UserControl
             Build(viewModel);
         };
 
-        ContentStack.Children.Add(new StackPanel
+        var form = new Grid();
+        form.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(1, GridUnitType.Star),
+            MaxWidth = 460,
+        });
+        form.Children.Add(new StackPanel
         {
             Spacing = 14,
             Children =
@@ -89,5 +103,6 @@ public sealed partial class LoginPage : UserControl
                 },
             },
         });
+        ContentStack.Children.Add(form);
     }
 }

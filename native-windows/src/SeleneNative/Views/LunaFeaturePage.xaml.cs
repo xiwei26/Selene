@@ -6,7 +6,6 @@ using SeleneNative.Core.Models;
 using SeleneNative.Core.Services;
 using Windows.System;
 using Windows.UI;
-using MH = Microsoft.UI;
 
 namespace SeleneNative.Views;
 
@@ -68,12 +67,13 @@ public sealed partial class LunaFeaturePage : UserControl
                 FontSize = 20,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             });
-            disabledPanel.Children.Add(new TextBlock
+            var disabledMessage = new TextBlock
             {
                 Text = $"请在 LunaTV 管理后台开启 {PageTitle(kind)} 功能。{ex.Message}",
-                Foreground = new SolidColorBrush(Color.FromArgb(255, 187, 203, 186)),
                 TextWrapping = TextWrapping.Wrap,
-            });
+            };
+            UiHelpers.SetThemeResource(disabledMessage, TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+            disabledPanel.Children.Add(disabledMessage);
 
             // Extract server URL from the provider (ServerApiClient)
             var serverUrl = _provider is ServerApiClient sapi ? sapi.BaseUrl : (string?)null;
@@ -83,11 +83,7 @@ public sealed partial class LunaFeaturePage : UserControl
                 {
                     Content = "打开管理后台",
                     HorizontalAlignment = HorizontalAlignment.Left,
-                    Background = new SolidColorBrush(Color.FromArgb(255, 18, 200, 102)),
-                    Foreground = new SolidColorBrush(MH.Colors.Black),
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Padding = new Thickness(16, 8, 16, 8),
-                    CornerRadius = new CornerRadius(6),
+                    Style = (Style)Application.Current.Resources["AccentButtonStyle"],
                 };
                 adminBtn.Click += async (_, _) =>
                 {
@@ -107,14 +103,22 @@ public sealed partial class LunaFeaturePage : UserControl
 
     private void AddSearchRow()
     {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        var row = new Grid { ColumnSpacing = 8, MaxWidth = 680, HorizontalAlignment = HorizontalAlignment.Stretch };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         _searchBox = new TextBox
         {
             PlaceholderText = _kind == "shortdrama" ? "搜索短剧" : $"搜索 {PageTitle(_kind)}",
-            MinWidth = 360,
         };
-        var button = new Button { Content = "搜索" };
+        var button = new Button { Content = "搜索", Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
         button.Click += async (_, _) => await SearchAsync();
+        _searchBox.KeyDown += async (_, e) =>
+        {
+            if (e.Key != VirtualKey.Enter) return;
+            e.Handled = true;
+            await SearchAsync();
+        };
+        Grid.SetColumn(button, 1);
         row.Children.Add(_searchBox);
         row.Children.Add(button);
         ContentStack.Children.Add(row);
@@ -156,8 +160,7 @@ public sealed partial class LunaFeaturePage : UserControl
                 {
                     Content = "打开管理后台",
                     HorizontalAlignment = HorizontalAlignment.Left,
-                    Background = new SolidColorBrush(Color.FromArgb(255, 18, 200, 102)),
-                    CornerRadius = new CornerRadius(6),
+                    Style = (Style)Application.Current.Resources["AccentButtonStyle"],
                 };
                 adminBtn.Click += async (_, _) =>
                 {
@@ -261,16 +264,18 @@ public sealed partial class LunaFeaturePage : UserControl
     private static Button CreateMediaCard(string title, string imageUrl, string meta, string? description)
     {
         var stack = new StackPanel { Spacing = 6, Width = 204 };
+        var placeholder = new FontIcon { Glyph = "\uE714", FontSize = 28 };
+        UiHelpers.SetThemeResource(placeholder, FontIcon.ForegroundProperty, "TextFillColorSecondaryBrush");
         var imageHost = new Border
         {
             Width = 204,
             Height = 116,
-            Background = new SolidColorBrush(Color.FromArgb(255, 24, 24, 24)),
             CornerRadius = new CornerRadius(8),
             Child = Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri)
                 ? new Image { Source = new BitmapImage(uri), Stretch = Stretch.UniformToFill }
-                : new FontIcon { Glyph = "\uE714", FontSize = 28, Foreground = new SolidColorBrush(Color.FromArgb(160, 255, 255, 255)) }
+                : placeholder
         };
+        UiHelpers.SetThemeResource(imageHost, Border.BackgroundProperty, "ControlFillColorSecondaryBrush");
         stack.Children.Add(imageHost);
         stack.Children.Add(new TextBlock
         {
@@ -279,23 +284,25 @@ public sealed partial class LunaFeaturePage : UserControl
             TextWrapping = TextWrapping.Wrap,
             MaxLines = 2,
         });
-        stack.Children.Add(new TextBlock
+        var metadata = new TextBlock
         {
             Text = meta,
-            Foreground = new SolidColorBrush(Color.FromArgb(180, 255, 255, 255)),
             FontSize = 12,
             TextTrimming = TextTrimming.CharacterEllipsis,
-        });
+        };
+        UiHelpers.SetThemeResource(metadata, TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+        stack.Children.Add(metadata);
         if (!string.IsNullOrWhiteSpace(description))
         {
-            stack.Children.Add(new TextBlock
+            var descriptionText = new TextBlock
             {
                 Text = description,
-                Foreground = new SolidColorBrush(Color.FromArgb(150, 255, 255, 255)),
                 FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
                 MaxLines = 2,
-            });
+            };
+            UiHelpers.SetThemeResource(descriptionText, TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+            stack.Children.Add(descriptionText);
         }
 
         return new Button
@@ -317,7 +324,7 @@ public sealed partial class LunaFeaturePage : UserControl
 
     private static string PageSubtitle(string kind) => kind switch
     {
-        "shortdrama" => "推荐、搜索、解析播放 LunaTV 短剧内容",
+        "shortdrama" => "浏览推荐短剧，搜索喜欢的内容。",
         "bilibili" => "浏览和搜索 Bilibili 视频",
         "youtube" => "浏览和搜索 YouTube 视频",
         _ => "LunaTV 平台内容",

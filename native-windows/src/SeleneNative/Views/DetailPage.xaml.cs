@@ -64,13 +64,18 @@ public sealed partial class DetailPage : UserControl
         {
             var rateStr = _vm.DoubanInfo.Rate;
             var hasRate = !string.IsNullOrWhiteSpace(rateStr) && rateStr != "0";
+            var ratingText = new TextBlock
+            {
+                Text = hasRate ? $"豆瓣 {rateStr}" : "暂无评分",
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            };
+            UiHelpers.SetThemeResource(ratingText, TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
             var ratingBadge = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(153, 0, 0, 0)),
-                BorderBrush = new SolidColorBrush(hasRate ? Color.FromArgb(255, 255, 215, 0) : Color.FromArgb(128, 128, 128, 128)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(10),
-                Padding = new Thickness(8, 2, 8, 2),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(8, 4, 8, 4),
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Margin = new Thickness(0, 4, 0, 4),
                 Child = new StackPanel
@@ -79,17 +84,13 @@ public sealed partial class DetailPage : UserControl
                     Spacing = 4,
                     Children =
                     {
-                        new FontIcon { Glyph = "\uE735", FontSize = 10, Foreground = new SolidColorBrush(hasRate ? Color.FromArgb(255, 255, 215, 0) : Color.FromArgb(128, 128, 128, 128)) },
-                        new TextBlock 
-                        { 
-                            Text = hasRate ? $"豆瓣 {rateStr}" : "暂无评分", 
-                            FontSize = 11, 
-                            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, 
-                            Foreground = new SolidColorBrush(hasRate ? Color.FromArgb(255, 255, 215, 0) : Color.FromArgb(128, 128, 128, 128)) 
-                        }
+                        new FontIcon { Glyph = "\uE735", FontSize = 12 },
+                        ratingText
                     }
                 }
             };
+            UiHelpers.SetThemeResource(ratingBadge, Border.BackgroundProperty, "ControlFillColorSecondaryBrush");
+            UiHelpers.SetThemeResource(ratingBadge, Border.BorderBrushProperty, "CardStrokeColorDefaultBrush");
             headerPanel.Children.Add(ratingBadge);
         }
 
@@ -321,15 +322,16 @@ public sealed partial class DetailPage : UserControl
 
         foreach (var comment in Comments.Take(5))
         {
-            stack.Children.Add(new TextBlock
+            var commentText = new TextBlock
             {
                 Text = string.IsNullOrWhiteSpace(comment.Author)
                     ? comment.Content
                     : $"{comment.Author}: {comment.Content}",
                 TextWrapping = TextWrapping.Wrap,
                 MaxWidth = 980,
-                Foreground = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)),
-            });
+            };
+            UiHelpers.SetThemeResource(commentText, TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+            stack.Children.Add(commentText);
         }
 
         return stack;
