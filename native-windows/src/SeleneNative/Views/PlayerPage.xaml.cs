@@ -184,6 +184,27 @@ public sealed partial class PlayerPage : UserControl
     /// <summary>Moves keyboard focus to the page so shortcuts act on the video.</summary>
     public void FocusVideo() => Focus(FocusState.Programmatic);
 
+    /// <summary>Focuses the video unless something inside the player already has focus.</summary>
+    public void EnsureKeyboardFocus()
+    {
+        if (XamlRoot is null)
+        {
+            return;
+        }
+
+        for (var node = FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
+             node is not null;
+             node = VisualTreeHelper.GetParent(node))
+        {
+            if (ReferenceEquals(node, this))
+            {
+                return;
+            }
+        }
+
+        FocusVideo();
+    }
+
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (_viewModel is null) return;
@@ -680,6 +701,9 @@ public sealed partial class PlayerPage : UserControl
             SpeedButton.Label = $"倍速 {rate}";
             ToolTipService.SetToolTip(SpeedButton, $"倍速：{rate}");
 
+            // The visible "1.5x" text would otherwise be the whole accessible name.
+            AutomationProperties.SetName(SpeedButton, $"倍速 {rate}");
+
             AutoNextToggle.IsChecked = vm.AutoPlayNext;
             EpisodesButton.IsEnabled = result is { Episodes.Count: > 0 };
             SourcesButton.IsEnabled = result is not null;
@@ -978,6 +1002,7 @@ public sealed partial class PlayerPage : UserControl
                 Text = overview,
                 TextWrapping = TextWrapping.Wrap,
                 MaxWidth = 1100,
+                HorizontalAlignment = HorizontalAlignment.Left,
             };
             UiHelpers.SetThemeResource(overviewText, TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
             stack.Children.Add(overviewText);
@@ -1113,6 +1138,7 @@ public sealed partial class PlayerPage : UserControl
             Text = text,
             TextWrapping = TextWrapping.Wrap,
             MaxWidth = 1100,
+            HorizontalAlignment = HorizontalAlignment.Left,
         };
         UiHelpers.SetThemeResource(label, TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
         stack.Children.Add(label);

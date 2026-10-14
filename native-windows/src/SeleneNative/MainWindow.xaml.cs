@@ -100,6 +100,7 @@ public sealed partial class MainWindow : Window
         AppWindow.Changed += OnAppWindowChanged;
         Closed += OnWindowClosed;
         Activated += OnFirstActivated;
+        Activated += OnWindowActivated;
     }
 
     private NavigationView BuildShell()
@@ -291,7 +292,19 @@ public sealed partial class MainWindow : Window
         AppWindow.Closing -= OnAppWindowClosing;
         AppWindow.Changed -= OnAppWindowChanged;
         Activated -= OnFirstActivated;
+        Activated -= OnWindowActivated;
         Closed -= OnWindowClosed;
+    }
+
+    private void OnWindowActivated(object sender, WindowActivatedEventArgs args)
+    {
+        // In full screen only the player is on screen. If full screen started while
+        // the window was inactive, nothing in it may hold keyboard focus, and Esc and
+        // the other shortcuts would go nowhere.
+        if (_isPlayerFullScreen && args.WindowActivationState != WindowActivationState.Deactivated)
+        {
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, _playerPage.EnsureKeyboardFocus);
+        }
     }
 
     /// <summary>
