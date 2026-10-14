@@ -6,18 +6,44 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
-
-        <ScrollViewer Grid.Column="0" MinWidth="320">
-            <StackPanel x:Name="LeftPanel" Spacing="14" Padding="28" />
-        </ScrollViewer>
-
-        <ScrollViewer Grid.Column="1">
-            <StackPanel x:Name="RightPanel" Spacing="16" Padding="28" />
-        </ScrollViewer>
-    </Grid>
+    <ScrollViewer HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
+        <Grid Padding="28">
+        <Grid x:Name="PageViewport">
+        <StackPanel x:Name="SearchContent" Spacing="16" MaxWidth="1200" HorizontalAlignment="Left"
+            Width="{Binding ActualWidth, ElementName=PageViewport}">
+            <TextBlock Text="搜索" Style="{ThemeResource TitleTextBlockStyle}" />
+            <TextBlock Text="查找电影、剧集和更多内容。" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <InfoBar x:Name="ErrorBar" Title="搜索失败" Severity="Error" IsOpen="False" IsClosable="True" />
+            <Grid ColumnSpacing="8" MaxWidth="680" HorizontalAlignment="Left"
+                Width="{Binding ActualWidth, ElementName=SearchContent}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="QueryBox" PlaceholderText="输入片名、剧名或关键词" AutomationProperties.Name="搜索关键词" />
+                <Button x:Name="SearchButton" Grid.Column="1" Content="搜索" Style="{StaticResource AccentButtonStyle}" />
+            </Grid>
+            <ToggleSwitch x:Name="StreamingToggle" Header="实时搜索" IsOn="True" OnContent="逐步显示搜索进度" OffContent="等待完整结果" />
+            <StackPanel x:Name="ProgressPanel" Spacing="4" Visibility="Collapsed">
+                <TextBlock x:Name="ProgressText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <ProgressBar x:Name="SearchProgress" Maximum="100" />
+            </StackPanel>
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="AggregateButton" Content="聚合" VerticalAlignment="Bottom" />
+                    <ComboBox x:Name="SourceBox" Header="来源" MinWidth="140" />
+                    <ComboBox x:Name="YearBox" Header="年份" MinWidth="110" />
+                    <Button x:Name="ClearFiltersButton" Content="清除筛选" VerticalAlignment="Bottom" />
+                </StackPanel>
+            </ScrollViewer>
+            <TextBox x:Name="BlockedBox" Header="屏蔽关键词" PlaceholderText="多个关键词用逗号分隔" MaxWidth="680" HorizontalAlignment="Left"
+                Width="{Binding ActualWidth, ElementName=SearchContent}" />
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollMode="Disabled">
+                <StackPanel x:Name="HistoryRow" Orientation="Horizontal" Spacing="6" />
+            </ScrollViewer>
+            <StackPanel x:Name="ResultsStack" Spacing="12" />
+        </StackPanel>
+        </Grid>
+        </Grid>
+    </ScrollViewer>
 </UserControl>

@@ -40,6 +40,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         _cacheService = cacheService ?? new CacheService();
         _versionService = versionService ?? new VersionService();
         _themeService = themeService ?? new ThemeService();
+        _theme = _themeService.Mode switch
+        {
+            ThemeMode.Light => "浅色",
+            ThemeMode.Dark => "深色",
+            _ => "跟随系统",
+        };
     }
 
     [RelayCommand]

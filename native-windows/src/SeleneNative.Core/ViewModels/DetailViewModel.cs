@@ -27,6 +27,13 @@ public sealed partial class DetailViewModel : ObservableObject
     private string? _errorMessage;
 
     public ObservableCollection<SearchResult> Sources { get; } = [];
+
+    /// <summary>
+    /// The loaded result followed by the other sources of the same work. Passed on
+    /// to the player so sources can be switched during playback.
+    /// </summary>
+    public IReadOnlyList<SearchResult> SourceCandidates { get; private set; } = [];
+
     public ObservableCollection<string> Episodes { get; } = [];
     public ObservableCollection<string> EpisodeTitles { get; } = [];
     public ObservableCollection<DoubanComment> Comments { get; } = [];
@@ -45,9 +52,11 @@ public sealed partial class DetailViewModel : ObservableObject
         SearchResult seed,
         IContentProvider? provider,
         IDoubanClient? doubanClient,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IEnumerable<SearchResult>? candidates = null)
     {
         Result = seed;
+        SourceCandidates = SourceMatcher.BuildCandidates(seed, candidates);
         Sources.Clear();
         Episodes.Clear();
         EpisodeTitles.Clear();
@@ -63,7 +72,7 @@ public sealed partial class DetailViewModel : ObservableObject
             foreach (var ep in seed.Episodes) Episodes.Add(ep);
             foreach (var title in seed.EpisodeTitles) EpisodeTitles.Add(title);
 
-            Sources.Add(seed);
+            foreach (var source in SourceCandidates) Sources.Add(source);
 
             if (provider is not null &&
                 !string.Equals(seed.Source, "shortdrama", StringComparison.OrdinalIgnoreCase) &&
@@ -83,6 +92,11 @@ public sealed partial class DetailViewModel : ObservableObject
                     {
                         Sources.Add(detail);
                     }
+
+                    // The fresh detail replaces the search-result copy of the same source.
+                    SourceCandidates = SourceMatcher.BuildCandidates(
+                        detail,
+                        SourceCandidates.Where(source => !SourceMatcher.IsSameSource(source, seed)));
                 }
             }
 

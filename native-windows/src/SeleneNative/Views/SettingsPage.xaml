@@ -6,7 +6,12 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
-    <ScrollViewer>
-        <StackPanel x:Name="ContentStack" Spacing="16" Padding="28" />
+    <ScrollViewer HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
+        <Grid Padding="28">
+            <Grid x:Name="PageViewport">
+                <StackPanel x:Name="ContentStack" Spacing="16" MaxWidth="960" HorizontalAlignment="Left"
+                    Width="{Binding ActualWidth, ElementName=PageViewport}" />
+            </Grid>
+        </Grid>
     </ScrollViewer>
 </UserControl>

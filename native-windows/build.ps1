@@ -3,17 +3,42 @@
 
 param(
     [string]$Configuration = "Release",
+    [ValidateSet("x86", "x64", "arm64")]
     [string]$Platform = "x64"
 )
+
+$ErrorActionPreference = "Stop"
 
 Write-Host "Building SeleneNative Windows version..."
 Write-Host "Configuration: $Configuration"
 Write-Host "Platform: $Platform"
 
-$ProjectPath = "src/SeleneNative/SeleneNative.csproj"
-$TestProjectPath = "tests/SeleneNative.Tests/SeleneNative.Tests.csproj"
-$CoreProjectPath = "src/SeleneNative.Core/SeleneNative.Core.csproj"
+$ProjectPath = Join-Path $PSScriptRoot "src/SeleneNative/SeleneNative.csproj"
+$TestProjectPath = Join-Path $PSScriptRoot "tests/SeleneNative.Tests/SeleneNative.Tests.csproj"
+$CoreProjectPath = Join-Path $PSScriptRoot "src/SeleneNative.Core/SeleneNative.Core.csproj"
 $CommonProperties = @("-p:Platform=$Platform")
+
+# Only a copy started from this folder (a build output or publish/) uses the
+# files that are cleaned and rebuilt here. A copy installed elsewhere is not
+# affected and may stay open. A process whose path cannot be read counts as ours.
+function Get-RunningBuildOutputProcesses {
+    $rootPath = [System.IO.Path]::GetFullPath($PSScriptRoot)
+    $rootWithSeparator = $rootPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+
+    Get-Process -Name "SeleneNative" -ErrorAction SilentlyContinue | Where-Object {
+        $processPath = $null
+        try { $processPath = $_.Path } catch { }
+        (-not $processPath) -or $processPath.StartsWith($rootWithSeparator, [System.StringComparison]::OrdinalIgnoreCase)
+    }
+}
+
+# Check before cleaning so a running app keeps its complete runtime payload.
+$RunningAppProcesses = Get-RunningBuildOutputProcesses
+if ($RunningAppProcesses) {
+    $RunningAppProcessIds = ($RunningAppProcesses | ForEach-Object { $_.Id }) -join ", "
+    Write-Host "Error: SeleneNative is still running (PID: $RunningAppProcessIds). Close it before building."
+    exit 1
+}
 
 function Remove-BuildDirectory {
     param([string]$RelativePath)
@@ -110,16 +135,14 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "Publishing..."
 $RuntimeIdentifier = "win-$Platform"
 $PublishPath = Join-Path $PSScriptRoot "publish/$RuntimeIdentifier"
-$RunningAppProcesses = Get-Process -Name "SeleneNative" -ErrorAction SilentlyContinue
+$RunningAppProcesses = Get-RunningBuildOutputProcesses
 if ($RunningAppProcesses) {
     $RunningAppProcessIds = ($RunningAppProcesses | ForEach-Object { $_.Id }) -join ", "
     Write-Host "Error: SeleneNative is still running (PID: $RunningAppProcessIds). Close it before publishing."
     exit 1
 }
 
-if (Test-Path $PublishPath) {
-    Remove-Item -LiteralPath $PublishPath -Recurse -Force
-}
+Remove-BuildDirectory "publish/$RuntimeIdentifier"
 
 dotnet publish $ProjectPath -c $Configuration @CommonProperties -r $RuntimeIdentifier --self-contained -o $PublishPath
 if ($LASTEXITCODE -ne 0) {
